@@ -5,10 +5,15 @@ import { getFirestore } from 'firebase-admin/firestore';
 import { getAuth } from 'firebase-admin/auth';
 import { config } from './config.js';
 import { createLinkFromUrl, extractUrl } from './links.js';
+import { createCanvaClient } from './canva.js';
+import { createCanvaSync } from './canvaSync.js';
+import { ensureMediaDir, serveMedia } from './media.js';
 
 const firebaseApp = initializeApp({ credential: cert(config.serviceAccount) });
 const db = getFirestore(firebaseApp);
 const auth = getAuth(firebaseApp);
+const canva = createCanvaClient(db);
+const canvaSync = createCanvaSync({ db, canva });
 
 const STATUSES = new Set(['pending', 'private', 'public']);
 const MAX_BODY_BYTES = 16_000;
@@ -34,6 +39,27 @@ function applyCors(req, res) {
 function sendJson(res, status, body) {
   res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8' });
   res.end(JSON.stringify(body));
+}
+
+function escapeHtml(text) {
+  return String(text).replace(/[&<>"']/g, (char) => `&#${char.charCodeAt(0)};`);
+}
+
+// Page affichée dans le navigateur au retour de Canva
+function sendHtml(res, status, title, message) {
+  const adminUrl = `${config.allowedOrigins[0] ?? ''}/admin`;
+  res.writeHead(status, { 'Content-Type': 'text/html; charset=utf-8' });
+  res.end(`<!doctype html>
+<html lang="fr">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>${escapeHtml(title)}</title>
+<body style="font-family: system-ui, sans-serif; max-width: 32rem; margin: 4rem auto; padding: 0 1rem; color: #111827; line-height: 1.5">
+  <h1 style="font-size: 1.5rem">${escapeHtml(title)}</h1>
+  <p>${escapeHtml(message)}</p>
+  <p><a href="${escapeHtml(adminUrl)}" style="color: #2563eb; font-weight: 600">Retour à l'admin</a></p>
+</body>
+</html>`);
 }
 
 function safeEqual(a, b) {
@@ -95,9 +121,60 @@ async function handleAddLink(req, res) {
   sendJson(res, result.created ? 201 : 200, result);
 }
 
+async function handleCanvaStatus(req, res) {
+  await authenticate(req);
+  const [connection, sync] = await Promise.all([canva.status(), canvaSync.status()]);
+  sendJson(res, 200, {
+    ...connection,
+    ...sync,
+    folderId: config.canva.folderId,
+    syncMinutes: config.canva.syncMinutes,
+  });
+}
+
+async function handleCanvaConnect(req, res) {
+  await authenticate(req);
+  if (!canva.isConfigured()) throw new HttpError(503, 'Ajoutez CANVA_CLIENT_SECRET dans Coolify pour activer Canva');
+  sendJson(res, 200, { url: await canva.startAuthorization() });
+}
+
+async function handleCanvaSync(req, res) {
+  await authenticate(req);
+  if (!(await canva.status()).connected) throw new HttpError(409, 'Canva n\'est pas connecté');
+  // La synchro peut durer plusieurs minutes (exports vidéo) : l'admin suit l'avancement via /canva/status
+  canvaSync.runSync('manuelle').catch(() => {});
+  sendJson(res, 202, { started: true });
+}
+
+async function handleCanvaCallback(res, searchParams) {
+  const error = searchParams.get('error');
+  if (error) {
+    sendHtml(res, 400, 'Connexion Canva annulée', `Canva a répondu : ${error}. Vous pouvez réessayer depuis l'admin.`);
+    return;
+  }
+
+  try {
+    await canva.completeAuthorization({ code: searchParams.get('code'), state: searchParams.get('state') });
+  } catch (err) {
+    console.error('[canva] connexion échouée :', err.message);
+    sendHtml(res, 400, 'Connexion Canva impossible', err.message);
+    return;
+  }
+
+  console.log('[canva] compte connecté');
+  canvaSync.runSync('après connexion').catch(() => {});
+  sendHtml(
+    res,
+    200,
+    'Canva est connecté ✅',
+    `Le dossier est surveillé toutes les ${config.canva.syncMinutes} minutes. Les nouveaux designs apparaîtront dans « À valider ».`
+  );
+}
+
 const server = http.createServer(async (req, res) => {
   applyCors(req, res);
-  const { pathname } = new URL(req.url ?? '/', 'http://localhost');
+  const { pathname, searchParams } = new URL(req.url ?? '/', 'http://localhost');
+  const route = `${req.method} ${pathname}`;
 
   try {
     if (req.method === 'OPTIONS') {
@@ -105,15 +182,33 @@ const server = http.createServer(async (req, res) => {
       res.end();
       return;
     }
-    if (req.method === 'GET' && pathname === '/health') {
-      sendJson(res, 200, { ok: true });
-      return;
+    if ((req.method === 'GET' || req.method === 'HEAD') && pathname.startsWith('/media/')) {
+      if (await serveMedia(req, res, pathname.slice('/media/'.length))) return;
+      throw new HttpError(404, 'Fichier introuvable');
     }
-    if (req.method === 'POST' && pathname === '/links') {
-      await handleAddLink(req, res);
-      return;
+
+    switch (route) {
+      case 'GET /health':
+        sendJson(res, 200, { ok: true });
+        return;
+      case 'POST /links':
+        await handleAddLink(req, res);
+        return;
+      case 'GET /canva/status':
+        await handleCanvaStatus(req, res);
+        return;
+      case 'POST /canva/connect':
+        await handleCanvaConnect(req, res);
+        return;
+      case 'POST /canva/sync':
+        await handleCanvaSync(req, res);
+        return;
+      case 'GET /canva/callback':
+        await handleCanvaCallback(res, searchParams);
+        return;
+      default:
+        throw new HttpError(404, 'Introuvable');
     }
-    throw new HttpError(404, 'Introuvable');
   } catch (err) {
     const status = err instanceof HttpError ? err.status : 500;
     if (status === 500) console.error('[erreur]', err);
@@ -125,6 +220,17 @@ server.listen(config.port, () => {
   console.log(`links-bot prêt sur le port ${config.port} (origines autorisées : ${config.allowedOrigins.join(', ')})`);
   if (!config.adminEmail && !config.apiToken) {
     console.warn('Ni ADMIN_EMAIL ni API_TOKEN définis : toutes les requêtes seront refusées');
+  }
+
+  ensureMediaDir().catch((err) => {
+    console.error(`[media] dossier ${config.mediaDir} inaccessible en écriture : ${err.message}`);
+  });
+
+  if (canva.isConfigured()) {
+    canvaSync.startScheduler();
+    console.log(`[canva] surveillance du dossier ${config.canva.folderId} toutes les ${config.canva.syncMinutes} min`);
+  } else {
+    console.log('[canva] CANVA_CLIENT_SECRET absent : import Canva désactivé');
   }
 });
 

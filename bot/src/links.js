@@ -96,10 +96,15 @@ export async function resolveLink(inputUrl) {
   };
 }
 
+// Identifiant du document d'un lien ajouté par partage (clé anti-doublon, ex. « canva:DAHUcF7LBG8 »)
+export function shareLinkId(key) {
+  return `auto-${createHash('sha1').update(key).digest('hex').slice(0, 20)}`;
+}
+
 export async function createLinkFromUrl(db, { url: inputUrl, status, category }) {
   const { url, kind, title, description, imageUrl, metadataError } = await resolveLink(inputUrl);
   const links = db.collection('links');
-  const docRef = links.doc(`auto-${createHash('sha1').update(kind.key).digest('hex').slice(0, 20)}`);
+  const docRef = links.doc(shareLinkId(kind.key));
 
   const existingById = await docRef.get();
   const existing = existingById.exists

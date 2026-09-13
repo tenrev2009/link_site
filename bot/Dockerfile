@@ -8,6 +8,9 @@ RUN npm ci --omit=dev
 
 COPY src ./src
 
+# Dossier des exports Canva : appartient à « node » pour qu'un volume Docker vide en hérite
+RUN mkdir -p /data/media && chown -R node:node /data
+
 USER node
 EXPOSE 3000
 
