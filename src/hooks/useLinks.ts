@@ -1,7 +1,20 @@
 import { useState, useEffect, useCallback } from 'react';
-import { collection, onSnapshot, getDocs, QuerySnapshot, DocumentData } from 'firebase/firestore';
+import {
+  collection,
+  onSnapshot,
+  getDocs,
+  query,
+  where,
+  Query,
+  QuerySnapshot,
+  DocumentData,
+} from 'firebase/firestore';
 import { db } from '../lib/firebase';
-import { Link } from '../types';
+import { Link, LinkStatus, LINK_STATUSES } from '../types';
+
+function toStatus(value: unknown): LinkStatus {
+  return LINK_STATUSES.includes(value as LinkStatus) ? (value as LinkStatus) : 'public';
+}
 
 function snapshotToLinks(snapshot: QuerySnapshot<DocumentData>): Link[] {
   const linksData = snapshot.docs.map((doc) => {
@@ -15,6 +28,7 @@ function snapshotToLinks(snapshot: QuerySnapshot<DocumentData>): Link[] {
       category: data.category ?? '',
       iconName: data.iconName ?? '',
       priority: data.priority ?? 0,
+      status: toStatus(data.status),
       createdAt: data.createdAt ?? null,
       updatedAt: data.updatedAt ?? null,
     } as Link;
@@ -22,7 +36,13 @@ function snapshotToLinks(snapshot: QuerySnapshot<DocumentData>): Link[] {
   return linksData.sort((a, b) => (a.priority ?? 0) - (b.priority ?? 0));
 }
 
-export function useLinks() {
+interface UseLinksOptions {
+  // true : tous les liens (admin connecté) ; false : uniquement les liens publics.
+  // Les règles Firestore refusent aux visiteurs toute requête non filtrée sur `public`.
+  includeHidden?: boolean;
+}
+
+export function useLinks({ includeHidden = false }: UseLinksOptions = {}) {
   const [links, setLinks] = useState<Link[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -31,7 +51,11 @@ export function useLinks() {
     let unsubscribe: (() => void) | null = null;
     let timedOut = false;
 
-    const colRef = collection(db, 'links');
+    const colRef: Query<DocumentData> = includeHidden
+      ? collection(db, 'links')
+      : query(collection(db, 'links'), where('status', '==', 'public'));
+
+    setError(null);
 
     unsubscribe = onSnapshot(
       colRef,
@@ -66,7 +90,7 @@ export function useLinks() {
       clearTimeout(timeout);
       if (unsubscribe) unsubscribe();
     };
-  }, []);
+  }, [includeHidden]);
 
   const updateLinksOrder = useCallback((newOrder: Link[]) => {
     setLinks(newOrder);

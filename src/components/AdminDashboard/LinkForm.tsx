@@ -11,6 +11,7 @@ const linkSchema = z.object({
   category: z.string().min(1, 'La catégorie est requise'),
   iconName: z.string().optional().default('FolderOpen'),
   priority: z.number().int().optional().default(0),
+  status: z.enum(['pending', 'private', 'public']),
 });
 
 type LinkFormData = z.infer<typeof linkSchema>;
@@ -46,6 +47,7 @@ export function LinkForm({ link, onSubmit, onCancel }: LinkFormProps) {
       category: link?.category ?? '',
       iconName: link?.iconName ?? 'FolderOpen',
       priority: link?.priority ?? 0,
+      status: link?.status ?? 'public',
     },
   });
 
@@ -126,6 +128,20 @@ export function LinkForm({ link, onSubmit, onCancel }: LinkFormProps) {
           {iconOptions.map((icon) => (
             <option key={icon} value={icon}>{icon}</option>
           ))}
+        </select>
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium text-gray-700">
+          Statut
+        </label>
+        <select
+          {...register('status')}
+          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+        >
+          <option value="public">Public : visible par tout le monde</option>
+          <option value="private">Privé : visible uniquement par vous</option>
+          <option value="pending">À valider</option>
         </select>
       </div>
 

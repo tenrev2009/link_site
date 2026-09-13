@@ -1,7 +1,8 @@
 import { DragDropContext, Droppable, Draggable, type DropResult } from 'react-beautiful-dnd';
-import { Link } from '../../types';
+import { Link, LinkStatus, LINK_STATUSES } from '../../types';
 import { Edit, Trash2, GripVertical, FolderOpen, FileText, Youtube, Github, Image as ImageIcon, Music2, Link as LinkIcon } from 'lucide-react';
 import { getYouTubeThumbnail } from '../../lib/utils';
+import { statusMeta } from '../../lib/linkStatus';
 
 const iconMap: Record<string, React.ComponentType<{ className?: string }>> = {
   FolderOpen,
@@ -17,9 +18,10 @@ interface LinkListProps {
   onEdit: (link: Link) => void;
   onDelete: (link: Link) => void;
   onReorder: (links: Link[]) => void;
+  onStatusChange: (link: Link, status: LinkStatus) => void;
 }
 
-export function LinkList({ links, onEdit, onDelete, onReorder }: LinkListProps) {
+export function LinkList({ links, onEdit, onDelete, onReorder, onStatusChange }: LinkListProps) {
   const handleDragEnd = (result: DropResult) => {
     if (!result.destination || result.destination.index === result.source.index) return;
 
@@ -27,12 +29,7 @@ export function LinkList({ links, onEdit, onDelete, onReorder }: LinkListProps) 
     const [reorderedItem] = items.splice(result.source.index, 1);
     items.splice(result.destination.index, 0, reorderedItem);
 
-    const reorderedLinks = items.map((item, index) => ({
-      ...item,
-      priority: index,
-    }));
-
-    onReorder(reorderedLinks);
+    onReorder(items);
   };
 
   return (
@@ -59,7 +56,7 @@ export function LinkList({ links, onEdit, onDelete, onReorder }: LinkListProps) 
                       <div
                         ref={provided.innerRef}
                         {...provided.draggableProps}
-                        className={`flex items-center justify-between p-4 bg-white rounded-lg shadow transition-all ${
+                        className={`flex flex-wrap items-center justify-between gap-3 p-4 bg-white rounded-lg shadow transition-all ${
                           snapshot.isDragging
                             ? 'shadow-lg ring-2 ring-blue-400 scale-[1.02]'
                             : 'hover:shadow-md'
@@ -90,6 +87,32 @@ export function LinkList({ links, onEdit, onDelete, onReorder }: LinkListProps) 
                               {link.category} · priorité {link.priority}
                             </p>
                           </div>
+                        </div>
+                        <div
+                          className="flex rounded-md border border-gray-200 overflow-hidden flex-shrink-0"
+                          role="group"
+                          aria-label="Statut du lien"
+                        >
+                          {LINK_STATUSES.map((status) => {
+                            const { label, icon: StatusIcon, activeClass } = statusMeta[status];
+                            const isActive = link.status === status;
+                            return (
+                              <button
+                                key={status}
+                                onClick={() => !isActive && onStatusChange(link, status)}
+                                aria-pressed={isActive}
+                                title={label}
+                                className={`flex items-center gap-1 px-3 py-1.5 text-xs font-medium transition-colors ${
+                                  isActive
+                                    ? activeClass
+                                    : 'bg-white text-gray-500 hover:bg-gray-50 hover:text-gray-800'
+                                }`}
+                              >
+                                <StatusIcon className="w-3.5 h-3.5" />
+                                <span className="hidden sm:inline">{label}</span>
+                              </button>
+                            );
+                          })}
                         </div>
                         <div className="flex space-x-2 flex-shrink-0">
                           <button

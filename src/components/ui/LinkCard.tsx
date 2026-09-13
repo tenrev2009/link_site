@@ -1,5 +1,5 @@
 import { Link } from '../../types';
-import { ExternalLink, FolderOpen, FileText, Youtube, Github, Image as ImageIcon, Music2, Link as LinkIcon } from 'lucide-react';
+import { ExternalLink, FolderOpen, FileText, Youtube, Github, Image as ImageIcon, Music2, Link as LinkIcon, Lock } from 'lucide-react';
 import { getYouTubeThumbnail, isYouTubeUrl } from '../../lib/utils';
 import { useState } from 'react';
 
@@ -26,6 +26,12 @@ export function LinkCard({ link }: LinkCardProps) {
 
   return (
     <div className="group relative bg-white rounded-lg shadow-md overflow-hidden hover:shadow-lg transition-shadow">
+      {link.status === 'private' && (
+        <span className="absolute top-2 left-2 z-10 inline-flex items-center gap-1 px-2 py-1 text-xs font-medium text-white bg-slate-800/80 rounded-full">
+          <Lock className="w-3 h-3" />
+          Privé
+        </span>
+      )}
       <div className="aspect-video overflow-hidden bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center">
         {showImage ? (
           <img

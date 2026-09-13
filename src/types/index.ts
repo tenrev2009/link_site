@@ -1,3 +1,10 @@
+// pending : en attente de validation (admin uniquement)
+// private : visible uniquement par l'admin connecté
+// public  : visible par tout le monde
+export type LinkStatus = 'pending' | 'private' | 'public';
+
+export const LINK_STATUSES: LinkStatus[] = ['pending', 'private', 'public'];
+
 export interface Link {
   id: string;
   title: string;
@@ -7,6 +14,7 @@ export interface Link {
   category: string;
   iconName: string;
   priority: number;
+  status: LinkStatus;
   createdAt: Date | string;
   updatedAt: Date | string;
 }

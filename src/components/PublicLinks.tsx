@@ -1,18 +1,28 @@
 import { useLinks } from '../hooks/useLinks';
 import { useSiteConfig } from '../hooks/useSiteConfig';
+import { useAuth } from '../hooks/useAuth';
 import { Layout } from './layout/Layout';
 import { LinkCard } from './ui/LinkCard';
 import { CategoryFilter } from './ui/CategoryFilter';
 import { useState } from 'react';
 import { Link as RouterLink } from 'react-router-dom';
-import { Lock, Link as LinkIcon } from 'lucide-react';
+import { Lock, Link as LinkIcon, Eye } from 'lucide-react';
 
 export function PublicLinks() {
-  const { links, loading: linksLoading, error: linksError } = useLinks();
+  const { user, loading: authLoading } = useAuth();
+  const { links: allLinks, loading: linksLoading, error: linksError } = useLinks({
+    includeHidden: !!user,
+  });
   const { config, loading: configLoading, error: configError } = useSiteConfig();
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
 
-  if (linksLoading || configLoading) {
+  // Connecté : aperçu des liens privés en plus des publics. Les liens à valider restent dans l'admin.
+  const links = allLinks.filter(
+    (link) => link.status === 'public' || (user && link.status === 'private')
+  );
+  const privateCount = links.filter((link) => link.status === 'private').length;
+
+  if (authLoading || linksLoading || configLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
@@ -60,6 +70,19 @@ export function PublicLinks() {
               <p className="text-xl text-gray-600 max-w-3xl mx-auto">
                 Retrouvez tous mes liens en un seul endroit
               </p>
+            </div>
+          )}
+
+          {user && (
+            <div className="max-w-2xl mx-auto mb-8 p-3 bg-slate-100 border border-slate-200 rounded-lg flex items-center justify-center gap-2 text-sm text-slate-700">
+              <Eye className="w-4 h-4 flex-shrink-0" />
+              <span>
+                Aperçu administrateur : {privateCount} lien{privateCount > 1 ? 's' : ''} privé
+                {privateCount > 1 ? 's' : ''} visible{privateCount > 1 ? 's' : ''} uniquement par vous.
+              </span>
+              <RouterLink to="/admin" className="font-medium text-blue-600 hover:text-blue-800">
+                Gérer
+              </RouterLink>
             </div>
           )}
 
