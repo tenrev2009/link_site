@@ -1,0 +1,76 @@
+import { useState, useEffect, useCallback } from 'react';
+import { collection, onSnapshot, getDocs, QuerySnapshot, DocumentData } from 'firebase/firestore';
+import { db } from '../lib/firebase';
+import { Link } from '../types';
+
+function snapshotToLinks(snapshot: QuerySnapshot<DocumentData>): Link[] {
+  const linksData = snapshot.docs.map((doc) => {
+    const data = doc.data();
+    return {
+      id: doc.id,
+      title: data.title ?? '',
+      url: data.url ?? '',
+      description: data.description ?? '',
+      imageUrl: data.imageUrl ?? '',
+      category: data.category ?? '',
+      iconName: data.iconName ?? '',
+      priority: data.priority ?? 0,
+      createdAt: data.createdAt ?? null,
+      updatedAt: data.updatedAt ?? null,
+    } as Link;
+  });
+  return linksData.sort((a, b) => (a.priority ?? 0) - (b.priority ?? 0));
+}
+
+export function useLinks() {
+  const [links, setLinks] = useState<Link[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let unsubscribe: (() => void) | null = null;
+    let timedOut = false;
+
+    const colRef = collection(db, 'links');
+
+    unsubscribe = onSnapshot(
+      colRef,
+      (snapshot) => {
+        if (timedOut) return;
+        setLinks(snapshotToLinks(snapshot));
+        setLoading(false);
+      },
+      (err) => {
+        console.error('Error fetching links:', err);
+        setError('Erreur lors du chargement des liens');
+        setLoading(false);
+      }
+    );
+
+    const timeout = setTimeout(async () => {
+      timedOut = true;
+      if (unsubscribe) {
+        unsubscribe();
+        unsubscribe = null;
+      }
+      try {
+        const snapshot = await getDocs(colRef);
+        setLinks(snapshotToLinks(snapshot));
+      } catch (e) {
+        console.error('Fallback fetch also failed:', e);
+      }
+      setLoading(false);
+    }, 5000);
+
+    return () => {
+      clearTimeout(timeout);
+      if (unsubscribe) unsubscribe();
+    };
+  }, []);
+
+  const updateLinksOrder = useCallback((newOrder: Link[]) => {
+    setLinks(newOrder);
+  }, []);
+
+  return { links, loading, error, updateLinksOrder };
+}
