@@ -148,19 +148,20 @@ export function createCanvaClient(db) {
     return data;
   }
 
-  async function listFolderDesigns(folderId) {
-    const designs = [];
+  // itemType : « design » ou « folder »
+  async function listFolderItems(folderId, itemType) {
+    const items = [];
     let continuation;
     do {
-      const params = new URLSearchParams({ item_types: 'design', limit: '100' });
+      const params = new URLSearchParams({ item_types: itemType, limit: '100' });
       if (continuation) params.set('continuation', continuation);
       const page = await api(`/folders/${encodeURIComponent(folderId)}/items?${params}`);
       for (const item of page.items ?? []) {
-        if (item.type === 'design' && item.design) designs.push(item.design);
+        if (item.type === itemType && item[itemType]) items.push(item[itemType]);
       }
       continuation = page.continuation;
     } while (continuation);
-    return designs;
+    return items;
   }
 
   // Lance un export et attend sa fin ; renvoie les URL de téléchargement (valables 24 h)
@@ -191,5 +192,5 @@ export function createCanvaClient(db) {
     };
   }
 
-  return { isConfigured, startAuthorization, completeAuthorization, listFolderDesigns, exportDesign, status };
+  return { isConfigured, startAuthorization, completeAuthorization, listFolderItems, exportDesign, status };
 }

@@ -4,8 +4,9 @@ Service qui alimente le site de liens :
 
 - **Ajout par lien** : reçoit un lien (Canva, YouTube, site web), récupère son titre et son image
   et l'ajoute dans Firestore (`links`) avec le statut **À valider**.
-- **Import automatique Canva** : surveille un dossier Canva ; chaque nouveau design est exporté
-  (MP4 si son nom contient `[vidéo]`, sinon PNG), stocké sur le VPS et ajouté **À valider**.
+- **Import automatique Canva** : surveille le dossier Canva « Site » ; chaque nouvelle publication est exportée
+  selon son sous-dossier (`Images` → PNG de la 1re page, `Vidéos` → MP4, `PDF` → PDF ; directement dans
+  « Site » → PNG), stockée sur le VPS et ajoutée **À valider**.
 
 ## API
 
@@ -19,7 +20,7 @@ Routes protégées : en-tête `Authorization: Bearer <jeton>` (jeton de connexio
 | `POST /canva/connect` | Renvoie l'adresse d'autorisation Canva (protégée) |
 | `POST /canva/sync` | Lance une synchro immédiate (protégée) |
 | `GET /canva/callback` | Retour OAuth de Canva |
-| `GET /media/<fichier>` | Vidéos et images exportées |
+| `GET /media/<fichier>` | Images, vidéos et PDF exportés |
 
 ## Variables d'environnement
 
