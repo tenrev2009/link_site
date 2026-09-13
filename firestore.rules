@@ -1,25 +1,38 @@
 rules_version = '2';
 
 // À copier dans la console Firebase : Firestore Database → Règles.
-// Remplacer ADMIN_EMAIL par l'adresse utilisée pour se connecter à /admin.
 service cloud.firestore {
   match /databases/{database}/documents {
 
+    // Seul le compte admin peut écrire (et non tout compte Firebase créé avec la clé publique)
     function isAdmin() {
       return request.auth != null
-        && request.auth.token.email == 'ADMIN_EMAIL';
+        && request.auth.token.email == 'tenrev2009@gmail.com';
     }
 
-    // Visiteurs : uniquement les liens publics (la requête doit filtrer sur status == 'public').
-    // Admin : tout, y compris les liens privés et à valider.
+    // Collection "links" : les visiteurs ne lisent que les liens publics
+    // (la requête doit filtrer sur status == 'public') ; l'admin lit et écrit tout.
     match /links/{linkId} {
       allow read: if resource.data.status == 'public' || isAdmin();
-      allow write: if isAdmin();
+      allow create, update, delete: if isAdmin();
     }
 
-    match /settings/{settingId} {
+    // Collection "settings" : lecture publique, écriture réservée à l'admin
+    match /settings/{docId} {
       allow read: if true;
-      allow write: if isAdmin();
+      allow create, update, delete: if isAdmin();
+    }
+
+    // Collection "users" : chaque utilisateur peut lire et modifier ses propres données
+    match /users/{userId} {
+      allow read: if request.auth != null && request.auth.uid == userId;
+      allow create, update: if request.auth != null && request.auth.uid == userId;
+      allow delete: if request.auth != null && request.auth.uid == userId;
+    }
+
+    // Bloquer tout le reste par défaut
+    match /{document=**} {
+      allow read, write: if false;
     }
   }
 }
