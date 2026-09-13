@@ -1,5 +1,5 @@
 import { Link } from '../../types';
-import { ExternalLink, FolderOpen, FileText, Youtube, Github, Image as ImageIcon, Music2, Link as LinkIcon, Lock } from 'lucide-react';
+import { ExternalLink, FolderOpen, FileText, Youtube, Github, Image as ImageIcon, Music2, Link as LinkIcon, Lock, Play } from 'lucide-react';
 import { getYouTubeThumbnail, isYouTubeUrl } from '../../lib/utils';
 import { useState } from 'react';
 
@@ -63,6 +63,12 @@ export function LinkCard({ link }: LinkCardProps) {
           <span className="inline-block px-2 py-1 text-xs font-medium text-blue-600 bg-blue-50 rounded-full">
             {link.category}
           </span>
+          {/\.mp4(\?|$)/i.test(link.url) && (
+            <span className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium text-violet-700 bg-violet-50 rounded-full">
+              <Play className="w-3 h-3" />
+              Vidéo
+            </span>
+          )}
           {isYouTube && (
             <span className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium text-red-600 bg-red-50 rounded-full">
               <Youtube className="w-3 h-3" />

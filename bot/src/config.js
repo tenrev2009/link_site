@@ -5,7 +5,7 @@ function readServiceAccount() {
   if (!raw) {
     throw new Error('Variable FIREBASE_SERVICE_ACCOUNT manquante (contenu du fichier JSON de la clé Firebase)');
   }
-  // Accepte le JSON collé tel quel, ou encodé en base64
+  // Accepte le JSON collé tel quel, ou encodé en base64 (une seule ligne, pour Coolify)
   const json = raw.startsWith('{') ? raw : Buffer.from(raw, 'base64').toString('utf8');
   try {
     return JSON.parse(json);
@@ -29,4 +29,15 @@ export const config = {
   // Jeton optionnel pour les automatisations sans connexion Firebase (n8n, raccourcis…)
   apiToken: process.env.API_TOKEN?.trim() || null,
   allowedOrigins: readList(process.env.ALLOWED_ORIGINS, 'https://links.biblio3d.net'),
+  // Adresse publique du service : liens des fichiers exportés et retour OAuth Canva
+  publicUrl: (process.env.PUBLIC_URL?.trim() || 'https://links-api.biblio3d.net').replace(/\/+$/, ''),
+  // Vidéos et images exportées depuis Canva (volume persistant dans Coolify)
+  mediaDir: process.env.MEDIA_DIR?.trim() || '/data/media',
+  canva: {
+    clientId: process.env.CANVA_CLIENT_ID?.trim() || 'OC-AaCcDmTgWYM6',
+    clientSecret: process.env.CANVA_CLIENT_SECRET?.trim() || null,
+    // Dossier « Site » : https://www.canva.com/folder/FAHVGvWXsZk
+    folderId: process.env.CANVA_FOLDER_ID?.trim() || 'FAHVGvWXsZk',
+    syncMinutes: Number(process.env.CANVA_SYNC_MINUTES) || 15,
+  },
 };

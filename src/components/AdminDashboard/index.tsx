@@ -17,6 +17,7 @@ import {
 import { auth } from '../../lib/firebase';
 import { statusMeta } from '../../lib/linkStatus';
 import { QuickAdd } from '../QuickAdd';
+import { CanvaPanel } from '../CanvaPanel';
 
 export function AdminDashboard() {
   const { links, loading, error, updateLinksOrder } = useLinks({ includeHidden: true });
@@ -206,7 +207,8 @@ export function AdminDashboard() {
           </div>
         ) : (
           <>
-            <div className="mb-6">
+            <div className="mb-6 space-y-4">
+              <CanvaPanel />
               <QuickAdd onAdded={(result) => selectTab(result.link.status)} />
             </div>
 
