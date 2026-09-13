@@ -61,6 +61,7 @@ export interface CanvaStatus {
     unchanged: number;
     skipped: number;
     errors: { designId: string; title: string; message: string }[];
+    warnings?: string[];
   } | null;
 }
 

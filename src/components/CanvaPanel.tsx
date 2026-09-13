@@ -114,9 +114,16 @@ export function CanvaPanel() {
 
       {status?.connected && result && !status.syncing && (
         <p className="mt-3 text-sm text-gray-600">
-          Dernière vérification : {result.designs} design{result.designs > 1 ? 's' : ''} dans le dossier ·{' '}
-          {result.imported} nouveau{result.imported > 1 ? 'x' : ''} · {result.updated} mis à jour
+          Dernière vérification : {result.designs} publication{result.designs > 1 ? 's' : ''} ·{' '}
+          {result.imported} nouvelle{result.imported > 1 ? 's' : ''} · {result.updated} mise{result.updated > 1 ? 's' : ''} à
+          jour
         </p>
+      )}
+
+      {status?.connected && (result?.warnings?.length ?? 0) > 0 && (
+        <div className="mt-3 p-3 text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-md">
+          {result?.warnings?.map((warning) => <p key={warning}>{warning}</p>)}
+        </div>
       )}
 
       {(error || status?.lastError || (result?.errors.length ?? 0) > 0) && (
@@ -136,8 +143,9 @@ export function CanvaPanel() {
 
       {status?.connected && (
         <p className="mt-3 text-xs text-gray-400">
-          Astuce : ajoutez <span className="font-mono">[vidéo]</span> dans le nom d'un design Canva pour l'exporter en
-          vidéo MP4. Sinon, il est exporté en image.
+          Rangez vos publications dans <span className="font-medium">Site/Images</span>,{' '}
+          <span className="font-medium">Site/Vidéos</span> ou <span className="font-medium">Site/PDF</span> : le format
+          d'export suit le sous-dossier.
         </p>
       )}
     </div>

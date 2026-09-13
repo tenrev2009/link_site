@@ -6,8 +6,8 @@ import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import { config } from './config.js';
 
-const CONTENT_TYPES = { '.mp4': 'video/mp4', '.png': 'image/png' };
-const SAFE_NAME = /^[A-Za-z0-9_-]+\.(mp4|png)$/;
+const CONTENT_TYPES = { '.mp4': 'video/mp4', '.png': 'image/png', '.pdf': 'application/pdf' };
+const SAFE_NAME = /^[A-Za-z0-9_-]+\.(mp4|png|pdf)$/;
 const DOWNLOAD_TIMEOUT_MS = 10 * 60_000;
 
 export async function ensureMediaDir() {

@@ -1,19 +1,36 @@
-// Surveillance du dossier Canva : chaque nouveau design devient un lien « À valider »
+// Surveillance du dossier Canva « Site » : chaque publication devient un lien « À valider »
+// Le format d'export dépend du sous-dossier : Site/Images, Site/Vidéos, Site/PDF
 import { config } from './config.js';
 import { downloadToMedia, removeMedia } from './media.js';
 import { shareLinkId } from './links.js';
 
-// Repère dans le nom du design pour l'exporter en vidéo : « [vidéo] », « [video] » ou « 🎬 »
-const VIDEO_MARKER = /\[\s*vid[ée]o\s*\]|🎬/giu;
 const DEFAULT_TITLE = 'Design Canva';
 const MAX_ATTEMPTS = 3;
 const MAX_REPORTED_ERRORS = 20;
 
-export function parseDesignTitle(rawTitle) {
-  const raw = String(rawTitle ?? '');
-  const isVideo = raw.search(VIDEO_MARKER) !== -1;
-  const title = raw.replace(VIDEO_MARKER, '').replace(/\s{2,}/g, ' ').trim();
-  return { isVideo, title: title || DEFAULT_TITLE };
+const SUBFOLDER_FORMATS = { images: 'image', image: 'image', videos: 'video', video: 'video', pdf: 'pdf', pdfs: 'pdf' };
+const SUBFOLDER_LABELS = { image: 'Images', video: 'Vidéos', pdf: 'PDF' };
+
+const EXPORTS = {
+  image: { extension: 'png', format: () => ({ type: 'png', pages: [1] }) },
+  video: {
+    extension: 'mp4',
+    format: (design) => {
+      const { width = 16, height = 9 } = design.thumbnail ?? {};
+      return { type: 'mp4', quality: height > width ? 'vertical_1080p' : 'horizontal_1080p' };
+    },
+  },
+  pdf: { extension: 'pdf', format: () => ({ type: 'pdf' }) },
+};
+
+// « Vidéos », « videos », « VIDEO » → video
+export function subfolderFormat(name) {
+  const normalized = String(name ?? '')
+    .normalize('NFD')
+    .replace(/\p{Diacritic}/gu, '')
+    .trim()
+    .toLowerCase();
+  return SUBFOLDER_FORMATS[normalized] ?? null;
 }
 
 const errorMessage = (err) => (err instanceof Error ? err.message : String(err));
@@ -24,9 +41,38 @@ export function createCanvaSync({ db, canva }) {
   const syncDoc = db.collection('integrations').doc('canvaSync');
   let running = null;
 
-  async function exportMedia(design, isVideo) {
+  async function collectPublications() {
+    const rootId = config.canva.folderId;
+    const [subfolders, rootDesigns] = await Promise.all([
+      canva.listFolderItems(rootId, 'folder'),
+      canva.listFolderItems(rootId, 'design'),
+    ]);
+
+    const publications = new Map();
+    // Publications rangées directement dans « Site » : exportées en image
+    for (const design of rootDesigns) publications.set(design.id, { design, kind: 'image' });
+
+    const foundKinds = new Set();
+    for (const folder of subfolders) {
+      const kind = subfolderFormat(folder.name);
+      if (!kind) continue;
+      foundKinds.add(kind);
+      for (const design of await canva.listFolderItems(folder.id, 'design')) {
+        publications.set(design.id, { design, kind });
+      }
+    }
+
+    const warnings = Object.entries(SUBFOLDER_LABELS)
+      .filter(([kind]) => !foundKinds.has(kind))
+      .map(([, label]) => `Sous-dossier « ${label} » introuvable dans « Site »`);
+
+    return { publications: [...publications.values()], warnings };
+  }
+
+  async function exportMedia(design, kind) {
     const version = design.updated_at ?? Math.floor(Date.now() / 1000);
     const base = `${design.id}-${version}`;
+    const { extension, format } = EXPORTS[kind];
     const files = [];
 
     try {
@@ -37,38 +83,30 @@ export function createCanvaSync({ db, canva }) {
         files.push(`${base}-miniature.png`);
       }
 
-      let url;
-      if (isVideo) {
-        const { width = 16, height = 9 } = design.thumbnail ?? {};
-        const quality = height > width ? 'vertical_1080p' : 'horizontal_1080p';
-        const [videoUrl] = await canva.exportDesign(design.id, { type: 'mp4', quality });
-        url = await downloadToMedia(videoUrl, `${base}.mp4`);
-        files.push(`${base}.mp4`);
-      } else {
-        const [imageExportUrl] = await canva.exportDesign(design.id, { type: 'png', pages: [1] });
-        url = await downloadToMedia(imageExportUrl, `${base}.png`);
-        files.push(`${base}.png`);
-        imageUrl ||= url;
-      }
+      // Une vidéo ou un PDF sort en un seul fichier ; une image ne garde que la première page
+      const [exportUrl] = await canva.exportDesign(design.id, format(design));
+      const url = await downloadToMedia(exportUrl, `${base}.${extension}`);
+      files.push(`${base}.${extension}`);
 
-      return { url, imageUrl, files };
+      return { url, imageUrl: imageUrl || (kind === 'image' ? url : ''), files };
     } catch (err) {
       await removeMedia(files);
       throw err;
     }
   }
 
-  async function processDesign(design) {
+  async function processPublication({ design, kind }) {
     const importRef = imports.doc(design.id);
     const record = (await importRef.get()).data();
     const version = design.updated_at ?? null;
+    const sameVersion = record?.version === version && record?.kind === kind;
 
-    if (record && record.version === version) {
+    if (record && sameVersion) {
       if (!record.error) return 'unchanged';
       if ((record.attempts ?? 0) >= MAX_ATTEMPTS) return 'skipped';
     }
 
-    // Réutilise le lien si ce design avait déjà été ajouté par partage
+    // Réutilise le lien si cette publication avait déjà été ajoutée par partage
     const legacyId = shareLinkId(`canva:${design.id}`);
     const linkId =
       record?.linkId ?? ((await links.doc(legacyId).get()).exists ? legacyId : `canva-${design.id}`);
@@ -78,15 +116,13 @@ export function createCanvaSync({ db, canva }) {
     // Lien supprimé dans l'admin après import : on respecte ce choix
     if (record?.linkId && !linkExists) return 'unchanged';
 
-    const { isVideo, title } = parseDesignTitle(design.title);
-
     try {
-      const media = await exportMedia(design, isVideo);
+      const media = await exportMedia(design, kind);
       const now = new Date().toISOString();
       const mediaFields = {
         url: media.url,
         imageUrl: media.imageUrl,
-        mediaType: isVideo ? 'video' : 'image',
+        mediaType: kind,
         canvaDesignId: design.id,
         updatedAt: now,
       };
@@ -97,10 +133,10 @@ export function createCanvaSync({ db, canva }) {
       } else {
         const count = (await links.count().get()).data().count;
         await linkRef.set({
-          title,
+          title: design.title?.trim() || DEFAULT_TITLE,
           description: '',
           category: 'Canva',
-          iconName: 'Image',
+          iconName: kind === 'pdf' ? 'FileText' : 'Image',
           priority: count,
           status: 'pending',
           source: 'canva-folder',
@@ -109,16 +145,17 @@ export function createCanvaSync({ db, canva }) {
         });
       }
 
-      await importRef.set({ linkId, version, title: design.title ?? '', isVideo, mediaFiles: media.files, importedAt: now });
+      await importRef.set({ linkId, version, kind, title: design.title ?? '', mediaFiles: media.files, importedAt: now });
       if (record?.mediaFiles) {
         await removeMedia(record.mediaFiles.filter((file) => !media.files.includes(file)));
       }
       return linkExists ? 'updated' : 'imported';
     } catch (err) {
-      const previousAttempts = record?.error && record.version === version ? record.attempts ?? 0 : 0;
+      const previousAttempts = record?.error && sameVersion ? record.attempts ?? 0 : 0;
       await importRef.set({
         ...(record ?? {}),
         version,
+        kind,
         title: design.title ?? '',
         error: errorMessage(err),
         attempts: previousAttempts + 1,
@@ -130,15 +167,17 @@ export function createCanvaSync({ db, canva }) {
 
   function runSync(trigger) {
     running ??= (async () => {
-      const summary = { designs: 0, imported: 0, updated: 0, unchanged: 0, skipped: 0, errors: [] };
+      const summary = { designs: 0, imported: 0, updated: 0, unchanged: 0, skipped: 0, errors: [], warnings: [] };
       try {
-        const designs = await canva.listFolderDesigns(config.canva.folderId);
-        summary.designs = designs.length;
+        const { publications, warnings } = await collectPublications();
+        summary.designs = publications.length;
+        summary.warnings = warnings;
 
-        for (const design of designs) {
+        for (const publication of publications) {
           try {
-            summary[await processDesign(design)] += 1;
+            summary[await processPublication(publication)] += 1;
           } catch (err) {
+            const { design } = publication;
             console.error(`[canva] « ${design.title ?? design.id} » : ${errorMessage(err)}`);
             if (summary.errors.length < MAX_REPORTED_ERRORS) {
               summary.errors.push({ designId: design.id, title: design.title ?? '', message: errorMessage(err) });
@@ -148,8 +187,8 @@ export function createCanvaSync({ db, canva }) {
 
         await syncDoc.set({ lastSyncAt: new Date().toISOString(), lastResult: summary, lastError: null }, { merge: true });
         console.log(
-          `[canva] synchro ${trigger} : ${summary.designs} design(s), ${summary.imported} importé(s), ` +
-            `${summary.updated} mis à jour, ${summary.errors.length} erreur(s)`
+          `[canva] synchro ${trigger} : ${summary.designs} publication(s), ${summary.imported} importée(s), ` +
+            `${summary.updated} mise(s) à jour, ${summary.errors.length} erreur(s)`
         );
         return summary;
       } catch (err) {
