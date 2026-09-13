@@ -38,6 +38,7 @@ export function useSiteConfig() {
   useEffect(() => {
     let unsubscribe: (() => void) | null = null;
     let timedOut = false;
+    let timeout: ReturnType<typeof setTimeout> | undefined;
 
     const colRef = query(collection(db, 'settings'), limit(1));
 
@@ -45,17 +46,21 @@ export function useSiteConfig() {
       colRef,
       (snapshot) => {
         if (timedOut) return;
+        // Le temps réel répond : on garde l'écoute ouverte et on annule le plan B
+        clearTimeout(timeout);
         setConfig(extractConfig(snapshot));
         setLoading(false);
       },
       (err) => {
         console.error('Error fetching site config:', err);
+        clearTimeout(timeout);
         setError('Erreur lors du chargement de la configuration');
         setLoading(false);
       }
     );
 
-    const timeout = setTimeout(async () => {
+    // Plan B uniquement si le temps réel n'a rien renvoyé en 5 s
+    timeout = setTimeout(async () => {
       timedOut = true;
       if (unsubscribe) {
         unsubscribe();

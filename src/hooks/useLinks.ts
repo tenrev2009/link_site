@@ -50,6 +50,7 @@ export function useLinks({ includeHidden = false }: UseLinksOptions = {}) {
   useEffect(() => {
     let unsubscribe: (() => void) | null = null;
     let timedOut = false;
+    let timeout: ReturnType<typeof setTimeout> | undefined;
 
     const colRef: Query<DocumentData> = includeHidden
       ? collection(db, 'links')
@@ -61,17 +62,21 @@ export function useLinks({ includeHidden = false }: UseLinksOptions = {}) {
       colRef,
       (snapshot) => {
         if (timedOut) return;
+        // Le temps réel répond : on garde l'écoute ouverte et on annule le plan B
+        clearTimeout(timeout);
         setLinks(snapshotToLinks(snapshot));
         setLoading(false);
       },
       (err) => {
         console.error('Error fetching links:', err);
+        clearTimeout(timeout);
         setError('Erreur lors du chargement des liens');
         setLoading(false);
       }
     );
 
-    const timeout = setTimeout(async () => {
+    // Plan B uniquement si le temps réel n'a rien renvoyé en 5 s (réseau qui bloque les WebSockets…)
+    timeout = setTimeout(async () => {
       timedOut = true;
       if (unsubscribe) {
         unsubscribe();
