@@ -16,6 +16,7 @@ import {
 } from '../../lib/api';
 import { auth } from '../../lib/firebase';
 import { statusMeta } from '../../lib/linkStatus';
+import { QuickAdd } from '../QuickAdd';
 
 export function AdminDashboard() {
   const { links, loading, error, updateLinksOrder } = useLinks({ includeHidden: true });
@@ -205,6 +206,10 @@ export function AdminDashboard() {
           </div>
         ) : (
           <>
+            <div className="mb-6">
+              <QuickAdd onAdded={(result) => selectTab(result.link.status)} />
+            </div>
+
             <div className="mb-6 flex flex-wrap gap-2 border-b border-gray-200" role="tablist">
               {LINK_STATUSES.map((status) => {
                 const { tabLabel, icon: Icon } = statusMeta[status];

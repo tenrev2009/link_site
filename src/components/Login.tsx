@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { signInWithEmailAndPassword } from 'firebase/auth';
 import { auth } from '../lib/firebase';
 import { Lock, AlertCircle, Eye, EyeOff } from 'lucide-react';
@@ -37,6 +37,8 @@ export function Login() {
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const navigate = useNavigate();
+  const location = useLocation();
+  const from = (location.state as { from?: { pathname: string; search: string } } | null)?.from;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -46,7 +48,7 @@ export function Login() {
 
     try {
       await signInWithEmailAndPassword(auth, email, password);
-      navigate('/admin');
+      navigate(from ? from.pathname + from.search : '/admin', { replace: true });
     } catch (err: any) {
       const code = err?.code;
       setErrorCode(code || '');

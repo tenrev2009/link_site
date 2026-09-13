@@ -1,0 +1,16 @@
+{
+  "name": "links-bot",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Ajoute des liens (Canva, YouTube, sites web) dans Firestore avec le statut « À valider »",
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "start": "node src/server.js"
+  },
+  "dependencies": {
+    "firebase-admin": "^13.4.0"
+  }
+}

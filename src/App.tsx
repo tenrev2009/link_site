@@ -3,6 +3,7 @@ import { PublicLinks } from './components/PublicLinks';
 import { AdminDashboard } from './components/AdminDashboard';
 import { Login } from './components/Login';
 import { PrivateRoute } from './components/PrivateRoute';
+import { SharePage } from './components/SharePage';
 
 function App() {
   return (
@@ -15,6 +16,14 @@ function App() {
           element={
             <PrivateRoute>
               <AdminDashboard />
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path="/partager"
+          element={
+            <PrivateRoute>
+              <SharePage />
             </PrivateRoute>
           }
         />
