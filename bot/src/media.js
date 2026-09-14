@@ -17,6 +17,10 @@ export async function ensureMediaDir() {
   await rm(probe);
 }
 
+export function mediaPath(name) {
+  return path.join(config.mediaDir, name);
+}
+
 export function mediaUrl(name) {
   return `${config.publicUrl}/media/${name}`;
 }

@@ -36,7 +36,7 @@ export function LinkCard({ link }: LinkCardProps) {
         {showImage ? (
           <img
             src={imageUrl}
-            alt={link.title}
+            alt={link.altText || link.title}
             className="w-full h-full object-cover transition-transform group-hover:scale-105"
             onError={() => setImgError(true)}
           />

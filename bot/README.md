@@ -20,6 +20,7 @@ Routes protégées : en-tête `Authorization: Bearer <jeton>` (jeton de connexio
 | `POST /canva/connect` | Renvoie l'adresse d'autorisation Canva (protégée) |
 | `POST /canva/sync` | Lance une synchro immédiate (protégée) |
 | `GET /canva/callback` | Retour OAuth de Canva |
+| `POST /links/<id>/describe` | Fait réécrire par Claude la fiche d'une publication Canva (protégée) |
 | `GET /media/<fichier>` | Images, vidéos et PDF exportés |
 
 ## Variables d'environnement
@@ -35,6 +36,11 @@ Routes protégées : en-tête `Authorization: Bearer <jeton>` (jeton de connexio
 | `CANVA_SYNC_MINUTES` | Fréquence de synchro (défaut : `15`) |
 | `PUBLIC_URL` | Adresse publique du service (défaut : `https://links-api.biblio3d.net`) |
 | `MEDIA_DIR` | Dossier des exports (défaut : `/data/media`) |
+| `ANTHROPIC_API_KEY` | Clé API Claude : active la rédaction des fiches (descriptif, mots-clés, catégorie, texte alternatif) |
+| `CLAUDE_MODEL` | Défaut : `claude-opus-5` |
+| `WHISPER_MODEL` | Transcription des vidéos (défaut : `onnx-community/whisper-base`) |
+| `MODEL_CACHE_DIR` | Modèles téléchargés (défaut : `/data/models`) |
+| `MAX_AUDIO_SECONDS` | Durée d'audio transcrite au maximum (défaut : `600`) |
 | `API_TOKEN` | Optionnel : jeton pour des automatisations (n8n…) |
 
 ## Déploiement Coolify

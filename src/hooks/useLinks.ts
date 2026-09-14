@@ -29,6 +29,12 @@ function snapshotToLinks(snapshot: QuerySnapshot<DocumentData>): Link[] {
       iconName: data.iconName ?? '',
       priority: data.priority ?? 0,
       status: toStatus(data.status),
+      keywords: Array.isArray(data.keywords) ? data.keywords : [],
+      altText: data.altText ?? '',
+      descriptionSource: data.descriptionSource ?? null,
+      aiError: data.aiError ?? null,
+      source: data.source ?? '',
+      mediaType: data.mediaType ?? '',
       createdAt: data.createdAt ?? null,
       updatedAt: data.updatedAt ?? null,
     } as Link;

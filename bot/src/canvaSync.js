@@ -35,11 +35,49 @@ export function subfolderFormat(name) {
 
 const errorMessage = (err) => (err instanceof Error ? err.message : String(err));
 
-export function createCanvaSync({ db, canva }) {
+class NotFoundError extends Error {
+  status = 404;
+}
+
+function reportError(summary, designId, title, message) {
+  console.error(`[canva] « ${title || designId} » : ${message}`);
+  if (summary.errors.length < MAX_REPORTED_ERRORS) summary.errors.push({ designId, title: title ?? '', message });
+}
+
+function splitMediaFiles(mediaFiles = []) {
+  return {
+    mainFile: mediaFiles.find((file) => !file.includes('-miniature.')),
+    thumbnailFile: mediaFiles.find((file) => file.includes('-miniature.')),
+  };
+}
+
+// describer : rédaction des fiches par Claude (null si ANTHROPIC_API_KEY est absente)
+export function createCanvaSync({ db, canva, describer = null }) {
   const imports = db.collection('canvaImports');
   const links = db.collection('links');
   const syncDoc = db.collection('integrations').doc('canvaSync');
   let running = null;
+
+  async function listCategories() {
+    const categories = (await links.get()).docs.map((doc) => doc.data().category);
+    return [...new Set(categories.filter((category) => category && category !== 'Canva'))].sort();
+  }
+
+  async function writeFiche({ kind, mediaFiles, title }) {
+    return describer.describe({ kind, ...splitMediaFiles(mediaFiles), title, categories: await listCategories() });
+  }
+
+  // Champs du lien après rédaction ; la catégorie n'est remplacée que si elle vaut encore « Canva »
+  function ficheFields(fiche, currentCategory) {
+    return {
+      description: fiche.description,
+      keywords: fiche.keywords,
+      altText: fiche.altText,
+      descriptionSource: 'ai',
+      aiError: null,
+      ...(fiche.category && (!currentCategory || currentCategory === 'Canva') ? { category: fiche.category } : {}),
+    };
+  }
 
   async function collectPublications() {
     const rootId = config.canva.folderId;
@@ -95,14 +133,41 @@ export function createCanvaSync({ db, canva }) {
     }
   }
 
-  async function processPublication({ design, kind }) {
+  // Nouvel essai de rédaction pour une publication déjà exportée (clé ajoutée plus tard, erreur passagère…)
+  async function retryFiche(importRef, record, design, summary) {
+    const linkRef = links.doc(record.linkId);
+    const link = (await linkRef.get()).data();
+    if (!link || link.descriptionSource === 'manual') {
+      await importRef.set({ ...record, aiPending: false });
+      return 'unchanged';
+    }
+
+    try {
+      const fiche = await writeFiche({ kind: record.kind, mediaFiles: record.mediaFiles, title: link.title });
+      await linkRef.update({ ...ficheFields(fiche, link.category), updatedAt: new Date().toISOString() });
+      await importRef.set({ ...record, aiPending: false, aiAttempts: 0 });
+      return 'described';
+    } catch (err) {
+      await linkRef.update({ aiError: errorMessage(err) });
+      await importRef.set({ ...record, aiAttempts: (record.aiAttempts ?? 0) + 1 });
+      reportError(summary, design.id, link.title, `fiche non rédigée : ${errorMessage(err)}`);
+      return 'unchanged';
+    }
+  }
+
+  async function processPublication({ design, kind }, summary) {
     const importRef = imports.doc(design.id);
     const record = (await importRef.get()).data();
     const version = design.updated_at ?? null;
     const sameVersion = record?.version === version && record?.kind === kind;
 
     if (record && sameVersion) {
-      if (!record.error) return 'unchanged';
+      if (!record.error) {
+        if (describer && record.aiPending && (record.aiAttempts ?? 0) < MAX_ATTEMPTS) {
+          return retryFiche(importRef, record, design, summary);
+        }
+        return 'unchanged';
+      }
       if ((record.attempts ?? 0) >= MAX_ATTEMPTS) return 'skipped';
     }
 
@@ -111,30 +176,51 @@ export function createCanvaSync({ db, canva }) {
     const linkId =
       record?.linkId ?? ((await links.doc(legacyId).get()).exists ? legacyId : `canva-${design.id}`);
     const linkRef = links.doc(linkId);
-    const linkExists = (await linkRef.get()).exists;
+    const linkSnapshot = await linkRef.get();
+    const existing = linkSnapshot.exists ? linkSnapshot.data() : null;
 
     // Lien supprimé dans l'admin après import : on respecte ce choix
-    if (record?.linkId && !linkExists) return 'unchanged';
+    if (record?.linkId && !existing) return 'unchanged';
 
     try {
       const media = await exportMedia(design, kind);
       const now = new Date().toISOString();
+      const title = existing?.title || design.title?.trim() || DEFAULT_TITLE;
+
+      // Un descriptif modifié à la main dans l'admin n'est jamais remplacé
+      let fiche = null;
+      let ficheError = null;
+      if (describer && existing?.descriptionSource !== 'manual') {
+        try {
+          fiche = await writeFiche({ kind, mediaFiles: media.files, title });
+        } catch (err) {
+          ficheError = errorMessage(err);
+          reportError(summary, design.id, title, `fiche non rédigée : ${ficheError}`);
+        }
+      }
+
       const mediaFields = {
         url: media.url,
         imageUrl: media.imageUrl,
         mediaType: kind,
         canvaDesignId: design.id,
         updatedAt: now,
+        ...(fiche ? ficheFields(fiche, existing?.category) : {}),
+        ...(ficheError ? { aiError: ficheError } : {}),
       };
 
-      if (linkExists) {
-        // Titre, catégorie et statut choisis dans l'admin sont conservés
+      if (existing) {
+        // Titre et statut choisis dans l'admin sont conservés
         await linkRef.update(mediaFields);
       } else {
         const count = (await links.count().get()).data().count;
         await linkRef.set({
-          title: design.title?.trim() || DEFAULT_TITLE,
+          title,
           description: '',
+          keywords: [],
+          altText: '',
+          descriptionSource: null,
+          aiError: null,
           category: 'Canva',
           iconName: kind === 'pdf' ? 'FileText' : 'Image',
           priority: count,
@@ -145,11 +231,21 @@ export function createCanvaSync({ db, canva }) {
         });
       }
 
-      await importRef.set({ linkId, version, kind, title: design.title ?? '', mediaFiles: media.files, importedAt: now });
+      await importRef.set({
+        linkId,
+        version,
+        kind,
+        title: design.title ?? '',
+        mediaFiles: media.files,
+        importedAt: now,
+        aiPending: !fiche && existing?.descriptionSource !== 'manual',
+        aiAttempts: ficheError ? 1 : 0,
+      });
       if (record?.mediaFiles) {
         await removeMedia(record.mediaFiles.filter((file) => !media.files.includes(file)));
       }
-      return linkExists ? 'updated' : 'imported';
+      if (fiche) summary.described += 1;
+      return existing ? 'updated' : 'imported';
     } catch (err) {
       const previousAttempts = record?.error && sameVersion ? record.attempts ?? 0 : 0;
       await importRef.set({
@@ -167,7 +263,16 @@ export function createCanvaSync({ db, canva }) {
 
   function runSync(trigger) {
     running ??= (async () => {
-      const summary = { designs: 0, imported: 0, updated: 0, unchanged: 0, skipped: 0, errors: [], warnings: [] };
+      const summary = {
+        designs: 0,
+        imported: 0,
+        updated: 0,
+        described: 0,
+        unchanged: 0,
+        skipped: 0,
+        errors: [],
+        warnings: [],
+      };
       try {
         const { publications, warnings } = await collectPublications();
         summary.designs = publications.length;
@@ -175,20 +280,17 @@ export function createCanvaSync({ db, canva }) {
 
         for (const publication of publications) {
           try {
-            summary[await processPublication(publication)] += 1;
+            summary[await processPublication(publication, summary)] += 1;
           } catch (err) {
             const { design } = publication;
-            console.error(`[canva] « ${design.title ?? design.id} » : ${errorMessage(err)}`);
-            if (summary.errors.length < MAX_REPORTED_ERRORS) {
-              summary.errors.push({ designId: design.id, title: design.title ?? '', message: errorMessage(err) });
-            }
+            reportError(summary, design.id, design.title, errorMessage(err));
           }
         }
 
         await syncDoc.set({ lastSyncAt: new Date().toISOString(), lastResult: summary, lastError: null }, { merge: true });
         console.log(
           `[canva] synchro ${trigger} : ${summary.designs} publication(s), ${summary.imported} importée(s), ` +
-            `${summary.updated} mise(s) à jour, ${summary.errors.length} erreur(s)`
+            `${summary.updated} mise(s) à jour, ${summary.described} fiche(s) rédigée(s), ${summary.errors.length} erreur(s)`
         );
         return summary;
       } catch (err) {
@@ -197,9 +299,34 @@ export function createCanvaSync({ db, canva }) {
         throw err;
       } finally {
         running = null;
+        await describer?.release?.();
       }
     })();
     return running;
+  }
+
+  // Bouton « Régénérer » de l'admin : réécrit la fiche, même si elle avait été modifiée à la main
+  async function redescribeLink(linkId) {
+    const linkRef = links.doc(linkId);
+    const link = (await linkRef.get()).data();
+    if (!link?.canvaDesignId) throw new NotFoundError('Lien introuvable ou non importé depuis Canva');
+
+    const importRef = imports.doc(link.canvaDesignId);
+    const record = (await importRef.get()).data();
+    if (!record?.mediaFiles?.length) throw new NotFoundError('Fichiers exportés introuvables pour ce lien');
+
+    try {
+      const fiche = await writeFiche({ kind: record.kind, mediaFiles: record.mediaFiles, title: link.title });
+      const fields = ficheFields(fiche, link.category);
+      await linkRef.update({ ...fields, updatedAt: new Date().toISOString() });
+      await importRef.set({ ...record, aiPending: false, aiAttempts: 0 });
+      return fields;
+    } catch (err) {
+      await linkRef.update({ aiError: errorMessage(err) });
+      throw err;
+    } finally {
+      if (!running) await describer?.release?.();
+    }
   }
 
   async function status() {
@@ -209,6 +336,7 @@ export function createCanvaSync({ db, canva }) {
       lastSyncAt: data.lastSyncAt ?? null,
       lastResult: data.lastResult ?? null,
       lastError: data.lastError ?? null,
+      aiEnabled: Boolean(describer),
     };
   }
 
@@ -224,5 +352,5 @@ export function createCanvaSync({ db, canva }) {
     setInterval(tick, config.canva.syncMinutes * 60_000);
   }
 
-  return { runSync, status, startScheduler };
+  return { runSync, redescribeLink, status, startScheduler };
 }

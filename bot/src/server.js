@@ -8,12 +8,14 @@ import { createLinkFromUrl, extractUrl } from './links.js';
 import { createCanvaClient } from './canva.js';
 import { createCanvaSync } from './canvaSync.js';
 import { ensureMediaDir, serveMedia } from './media.js';
+import { createDescriber } from './ai/describe.js';
 
 const firebaseApp = initializeApp({ credential: cert(config.serviceAccount) });
 const db = getFirestore(firebaseApp);
 const auth = getAuth(firebaseApp);
 const canva = createCanvaClient(db);
-const canvaSync = createCanvaSync({ db, canva });
+const describer = config.ai.enabled ? createDescriber() : null;
+const canvaSync = createCanvaSync({ db, canva, describer });
 
 const STATUSES = new Set(['pending', 'private', 'public']);
 const MAX_BODY_BYTES = 16_000;
@@ -146,6 +148,14 @@ async function handleCanvaSync(req, res) {
   sendJson(res, 202, { started: true });
 }
 
+async function handleRedescribe(req, res, linkId) {
+  await authenticate(req);
+  if (!describer) throw new HttpError(503, 'Ajoutez ANTHROPIC_API_KEY dans Coolify pour activer les fiches rédigées par Claude');
+  const fields = await canvaSync.redescribeLink(linkId);
+  console.log(`[claude] fiche régénérée : ${linkId}`);
+  sendJson(res, 200, fields);
+}
+
 async function handleCanvaCallback(res, searchParams) {
   const error = searchParams.get('error');
   if (error) {
@@ -186,6 +196,11 @@ const server = http.createServer(async (req, res) => {
       if (await serveMedia(req, res, pathname.slice('/media/'.length))) return;
       throw new HttpError(404, 'Fichier introuvable');
     }
+    const redescribe = req.method === 'POST' && pathname.match(/^\/links\/([A-Za-z0-9_-]{1,200})\/describe$/);
+    if (redescribe) {
+      await handleRedescribe(req, res, redescribe[1]);
+      return;
+    }
 
     switch (route) {
       case 'GET /health':
@@ -210,7 +225,7 @@ const server = http.createServer(async (req, res) => {
         throw new HttpError(404, 'Introuvable');
     }
   } catch (err) {
-    const status = err instanceof HttpError ? err.status : 500;
+    const status = err instanceof HttpError || err?.status === 404 ? err.status : 500;
     if (status === 500) console.error('[erreur]', err);
     sendJson(res, status, { error: status === 500 ? 'Erreur interne du service' : err.message });
   }
@@ -225,6 +240,12 @@ server.listen(config.port, () => {
   ensureMediaDir().catch((err) => {
     console.error(`[media] dossier ${config.mediaDir} inaccessible en écriture : ${err.message}`);
   });
+
+  console.log(
+    describer
+      ? `[claude] fiches rédigées avec ${config.ai.model}, transcription ${config.ai.whisperModel}`
+      : '[claude] ANTHROPIC_API_KEY absente : fiches non rédigées'
+  );
 
   if (canva.isConfigured()) {
     canvaSync.startScheduler();

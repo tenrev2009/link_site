@@ -1,6 +1,6 @@
 import { DragDropContext, Droppable, Draggable, type DropResult } from 'react-beautiful-dnd';
 import { Link, LinkStatus, LINK_STATUSES } from '../../types';
-import { Edit, Trash2, GripVertical, FolderOpen, FileText, Youtube, Github, Image as ImageIcon, Music2, Link as LinkIcon } from 'lucide-react';
+import { Edit, Trash2, GripVertical, FolderOpen, FileText, Youtube, Github, Image as ImageIcon, Music2, Link as LinkIcon, Sparkles, Loader2 } from 'lucide-react';
 import { getYouTubeThumbnail } from '../../lib/utils';
 import { statusMeta } from '../../lib/linkStatus';
 
@@ -19,9 +19,19 @@ interface LinkListProps {
   onDelete: (link: Link) => void;
   onReorder: (links: Link[]) => void;
   onStatusChange: (link: Link, status: LinkStatus) => void;
+  onRedescribe: (link: Link) => void;
+  redescribingIds: Set<string>;
 }
 
-export function LinkList({ links, onEdit, onDelete, onReorder, onStatusChange }: LinkListProps) {
+export function LinkList({
+  links,
+  onEdit,
+  onDelete,
+  onReorder,
+  onStatusChange,
+  onRedescribe,
+  redescribingIds,
+}: LinkListProps) {
   const handleDragEnd = (result: DropResult) => {
     if (!result.destination || result.destination.index === result.source.index) return;
 
@@ -85,7 +95,13 @@ export function LinkList({ links, onEdit, onDelete, onReorder, onStatusChange }:
                             <h3 className="font-medium truncate">{link.title}</h3>
                             <p className="text-sm text-gray-500">
                               {link.category} · priorité {link.priority}
+                              {link.descriptionSource === 'ai' && ' · ✨ fiche rédigée par Claude'}
                             </p>
+                            {link.aiError && (
+                              <p className="text-xs text-red-600 truncate" title={link.aiError}>
+                                Fiche non rédigée : {link.aiError}
+                              </p>
+                            )}
                           </div>
                         </div>
                         <div
@@ -115,6 +131,21 @@ export function LinkList({ links, onEdit, onDelete, onReorder, onStatusChange }:
                           })}
                         </div>
                         <div className="flex space-x-2 flex-shrink-0">
+                          {link.source === 'canva-folder' && (
+                            <button
+                              onClick={() => onRedescribe(link)}
+                              disabled={redescribingIds.has(link.id)}
+                              title="Régénérer la fiche avec Claude"
+                              aria-label="Régénérer la fiche avec Claude"
+                              className="p-2 text-gray-600 hover:text-violet-600 transition-colors disabled:opacity-50"
+                            >
+                              {redescribingIds.has(link.id) ? (
+                                <Loader2 className="w-5 h-5 animate-spin" />
+                              ) : (
+                                <Sparkles className="w-5 h-5" />
+                              )}
+                            </button>
+                          )}
                           <button
                             onClick={() => onEdit(link)}
                             className="p-2 text-gray-600 hover:text-blue-600 transition-colors"
