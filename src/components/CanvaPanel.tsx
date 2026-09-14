@@ -117,6 +117,9 @@ export function CanvaPanel() {
           Dernière vérification : {result.designs} publication{result.designs > 1 ? 's' : ''} ·{' '}
           {result.imported} nouvelle{result.imported > 1 ? 's' : ''} · {result.updated} mise{result.updated > 1 ? 's' : ''} à
           jour
+          {status.aiEnabled
+            ? ` · ${result.described ?? 0} fiche${(result.described ?? 0) > 1 ? 's' : ''} rédigée${(result.described ?? 0) > 1 ? 's' : ''} par Claude`
+            : ' · fiches Claude désactivées (clé API absente)'}
         </p>
       )}
 

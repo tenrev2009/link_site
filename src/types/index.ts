@@ -15,6 +15,13 @@ export interface Link {
   iconName: string;
   priority: number;
   status: LinkStatus;
+  // Fiche rédigée par Claude pour les publications Canva
+  keywords?: string[];
+  altText?: string;
+  descriptionSource?: 'ai' | 'manual' | null;
+  aiError?: string | null;
+  source?: string;
+  mediaType?: string;
   createdAt: Date | string;
   updatedAt: Date | string;
 }

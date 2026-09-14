@@ -54,10 +54,12 @@ export interface CanvaStatus {
   syncing: boolean;
   lastSyncAt: string | null;
   lastError: string | null;
+  aiEnabled?: boolean;
   lastResult: {
     designs: number;
     imported: number;
     updated: number;
+    described?: number;
     unchanged: number;
     skipped: number;
     errors: { designId: string; title: string; message: string }[];
@@ -71,6 +73,18 @@ export function getCanvaStatus(): Promise<CanvaStatus> {
 
 export function connectCanva(): Promise<{ url: string }> {
   return callBot('/canva/connect', { method: 'POST' });
+}
+
+export interface GeneratedFiche {
+  description: string;
+  keywords: string[];
+  altText: string;
+  category?: string;
+}
+
+// Demande à Claude de réécrire la fiche d'une publication importée depuis Canva
+export function redescribeLink(linkId: string): Promise<GeneratedFiche> {
+  return callBot(`/links/${encodeURIComponent(linkId)}/describe`, { method: 'POST' });
 }
 
 export function syncCanva(): Promise<{ started: boolean }> {

@@ -18,6 +18,8 @@ import { auth } from '../../lib/firebase';
 import { statusMeta } from '../../lib/linkStatus';
 import { QuickAdd } from '../QuickAdd';
 import { CanvaPanel } from '../CanvaPanel';
+import { redescribeLink } from '../../lib/botApi';
+import type { LinkFormValues } from './LinkForm';
 
 export function AdminDashboard() {
   const { links, loading, error, updateLinksOrder } = useLinks({ includeHidden: true });
@@ -27,6 +29,7 @@ export function AdminDashboard() {
   const [statusError, setStatusError] = useState(false);
   const [activeTab, setActiveTab] = useState<LinkStatus>('pending');
   const [tabChosen, setTabChosen] = useState(false);
+  const [redescribingIds, setRedescribingIds] = useState<Set<string>>(new Set());
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -64,9 +67,14 @@ export function AdminDashboard() {
     }
   };
 
-  const handleSubmit = async (data: Omit<Link, 'id' | 'createdAt' | 'updatedAt'>) => {
+  const handleSubmit = async (data: LinkFormValues) => {
     if (editingLink) {
-      await updateLink(editingLink.id, data);
+      // Une fiche corrigée à la main ne sera plus jamais réécrite automatiquement par Claude
+      const ficheEdited =
+        data.description !== editingLink.description ||
+        data.altText !== (editingLink.altText ?? '') ||
+        data.keywords.join(',') !== (editingLink.keywords ?? []).join(',');
+      await updateLink(editingLink.id, ficheEdited ? { ...data, descriptionSource: 'manual' } : data);
     } else {
       await addLink({ ...data, priority: links.length });
     }
@@ -83,6 +91,28 @@ export function AdminDashboard() {
   const handleDelete = async (link: Link) => {
     if (window.confirm('Êtes-vous sûr de vouloir supprimer ce lien ?')) {
       await deleteLink(link.id);
+    }
+  };
+
+  const handleRedescribe = async (link: Link) => {
+    if (
+      link.descriptionSource === 'manual' &&
+      !window.confirm('Ce descriptif a été modifié à la main. Le remplacer par une nouvelle fiche rédigée par Claude ?')
+    ) {
+      return;
+    }
+    setRedescribingIds((ids) => new Set(ids).add(link.id));
+    try {
+      // La fiche mise à jour arrive d'elle-même par l'écoute en temps réel de Firestore
+      await redescribeLink(link.id);
+    } catch (err) {
+      window.alert(`Fiche non régénérée : ${err instanceof Error ? err.message : 'erreur inconnue'}`);
+    } finally {
+      setRedescribingIds((ids) => {
+        const next = new Set(ids);
+        next.delete(link.id);
+        return next;
+      });
     }
   };
 
@@ -257,6 +287,8 @@ export function AdminDashboard() {
                 onDelete={handleDelete}
                 onReorder={handleReorder}
                 onStatusChange={handleStatusChange}
+                onRedescribe={handleRedescribe}
+                redescribingIds={redescribingIds}
               />
             )}
           </>

@@ -23,6 +23,8 @@ export async function addLink(data: Omit<Link, 'id' | 'createdAt' | 'updatedAt'>
     iconName: data.iconName || 'FolderOpen',
     priority: data.priority ?? 0,
     status: data.status ?? 'pending',
+    keywords: data.keywords ?? [],
+    altText: data.altText ?? '',
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
   });

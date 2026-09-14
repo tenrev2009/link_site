@@ -12,13 +12,17 @@ const linkSchema = z.object({
   iconName: z.string().optional().default('FolderOpen'),
   priority: z.number().int().optional().default(0),
   status: z.enum(['pending', 'private', 'public']),
+  keywordsText: z.string().optional().default(''),
+  altText: z.string().optional().default(''),
 });
 
 type LinkFormData = z.infer<typeof linkSchema>;
 
+export type LinkFormValues = Omit<LinkFormData, 'keywordsText'> & { keywords: string[] };
+
 interface LinkFormProps {
   link?: Link;
-  onSubmit: (data: LinkFormData) => Promise<void>;
+  onSubmit: (data: LinkFormValues) => Promise<void>;
   onCancel: () => void;
 }
 
@@ -48,11 +52,22 @@ export function LinkForm({ link, onSubmit, onCancel }: LinkFormProps) {
       iconName: link?.iconName ?? 'FolderOpen',
       priority: link?.priority ?? 0,
       status: link?.status ?? 'public',
+      keywordsText: (link?.keywords ?? []).join(', '),
+      altText: link?.altText ?? '',
     },
   });
 
+  const submit = ({ keywordsText, ...values }: LinkFormData) =>
+    onSubmit({
+      ...values,
+      keywords: keywordsText
+        .split(',')
+        .map((keyword) => keyword.trim().toLowerCase())
+        .filter(Boolean),
+    });
+
   return (
-    <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+    <form onSubmit={handleSubmit(submit)} className="space-y-4">
       <div>
         <label className="block text-sm font-medium text-gray-700">
           Titre
@@ -88,6 +103,28 @@ export function LinkForm({ link, onSubmit, onCancel }: LinkFormProps) {
         <textarea
           {...register('description')}
           rows={3}
+          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+        />
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium text-gray-700">
+          Mots-clés (séparés par des virgules)
+        </label>
+        <input
+          type="text"
+          {...register('keywordsText')}
+          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+        />
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium text-gray-700">
+          Texte alternatif de l'image
+        </label>
+        <input
+          type="text"
+          {...register('altText')}
           className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
         />
       </div>

@@ -40,4 +40,14 @@ export const config = {
     folderId: process.env.CANVA_FOLDER_ID?.trim() || 'FAHVGvWXsZk',
     syncMinutes: Number(process.env.CANVA_SYNC_MINUTES) || 15,
   },
+  // Fiches rédigées par Claude (descriptif, mots-clés, catégorie, texte alternatif)
+  ai: {
+    // Le SDK Anthropic lit lui-même ANTHROPIC_API_KEY
+    enabled: Boolean(process.env.ANTHROPIC_API_KEY?.trim()),
+    model: process.env.CLAUDE_MODEL?.trim() || 'claude-opus-5',
+    // Transcription des commentaires et interviews des vidéos, exécutée sur le VPS
+    whisperModel: process.env.WHISPER_MODEL?.trim() || 'onnx-community/whisper-base',
+    modelCacheDir: process.env.MODEL_CACHE_DIR?.trim() || '/data/models',
+    maxAudioSeconds: Number(process.env.MAX_AUDIO_SECONDS) || 600,
+  },
 };

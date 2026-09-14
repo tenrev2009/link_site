@@ -11,6 +11,8 @@
     "start": "node src/server.js"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.125.0",
+    "@huggingface/transformers": "^4.2.0",
     "firebase-admin": "^13.4.0"
   }
 }
