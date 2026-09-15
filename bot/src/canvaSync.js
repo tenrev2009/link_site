@@ -2,7 +2,7 @@
 // Le format d'export dépend du sous-dossier : Site/Images, Site/Vidéos, Site/PDF
 import { config } from './config.js';
 import { downloadToMedia, removeMedia } from './media.js';
-import { shareLinkId } from './links.js';
+import { shareLinkId, topPriority } from './links.js';
 
 const DEFAULT_TITLE = 'Design Canva';
 const MAX_ATTEMPTS = 3;
@@ -213,7 +213,7 @@ export function createCanvaSync({ db, canva, describer = null }) {
         // Titre et statut choisis dans l'admin sont conservés
         await linkRef.update(mediaFields);
       } else {
-        const count = (await links.count().get()).data().count;
+        const priority = await topPriority(links);
         await linkRef.set({
           title,
           description: '',
@@ -223,7 +223,7 @@ export function createCanvaSync({ db, canva, describer = null }) {
           aiError: null,
           category: 'Canva',
           iconName: kind === 'pdf' ? 'FileText' : 'Image',
-          priority: count,
+          priority,
           status: 'pending',
           source: 'canva-folder',
           createdAt: now,
