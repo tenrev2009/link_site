@@ -2,7 +2,7 @@
 // Le format d'export dépend du sous-dossier : Site/Images, Site/Vidéos, Site/PDF
 import { config } from './config.js';
 import { downloadToMedia, removeMedia } from './media.js';
-import { shareLinkId, topPriority } from './links.js';
+import { shareLinkId, splitCategories, topPriority } from './links.js';
 
 const DEFAULT_TITLE = 'Design Canva';
 const MAX_ATTEMPTS = 3;
@@ -59,7 +59,7 @@ export function createCanvaSync({ db, canva, describer = null }) {
   let running = null;
 
   async function listCategories() {
-    const categories = (await links.get()).docs.map((doc) => doc.data().category);
+    const categories = (await links.get()).docs.flatMap((doc) => splitCategories(doc.data().category));
     return [...new Set(categories.filter((category) => category && category !== 'Canva'))].sort();
   }
 

@@ -96,6 +96,20 @@ export async function resolveLink(inputUrl) {
   };
 }
 
+// Un lien peut avoir plusieurs catégories, séparées par des virgules : « AI, Sketchup »
+export function splitCategories(value) {
+  const seen = new Set();
+  return String(value ?? '')
+    .split(',')
+    .map((category) => category.trim())
+    .filter((category) => {
+      const key = category.toLowerCase();
+      if (!category || seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+}
+
 // Identifiant du document d'un lien ajouté par partage (clé anti-doublon, ex. « canva:DAHUcF7LBG8 »)
 export function shareLinkId(key) {
   return `auto-${createHash('sha1').update(key).digest('hex').slice(0, 20)}`;

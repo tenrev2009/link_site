@@ -4,7 +4,7 @@ import { initializeApp, cert } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
 import { getAuth } from 'firebase-admin/auth';
 import { config } from './config.js';
-import { createLinkFromUrl, extractUrl } from './links.js';
+import { createLinkFromUrl, extractUrl, splitCategories } from './links.js';
 import { createCanvaClient } from './canva.js';
 import { createCanvaSync } from './canvaSync.js';
 import { ensureMediaDir, serveMedia } from './media.js';
@@ -120,7 +120,7 @@ async function handleAddLink(req, res) {
   if (!url) throw new HttpError(422, 'Aucun lien http(s) trouvé dans le texte envoyé');
 
   const status = STATUSES.has(body.status) ? body.status : 'pending';
-  const category = typeof body.category === 'string' ? body.category.trim().slice(0, 50) : '';
+  const category = typeof body.category === 'string' ? splitCategories(body.category).join(', ').slice(0, 120) : '';
 
   const result = await createLinkFromUrl(db, { url, status, category });
   console.log(

@@ -1,4 +1,6 @@
 // Page publique d'un post (/p/<id>) : aperçu pour les réseaux sociaux (Open Graph) et lecture de la publication
+import { splitCategories } from './links.js';
+
 const SITE_NAME = 'biblio3d';
 const DESCRIPTION_PREVIEW_LENGTH = 200;
 
@@ -170,7 +172,7 @@ export function renderPostPage({ id, link, shareUrl, siteUrl, previewImageUrl = 
         <h1>${title}</h1>
         ${link.description ? `<p>${escapeHtml(link.description)}</p>` : ''}
         <ul class="chips">
-          ${link.category ? `<li class="category">${escapeHtml(link.category)}</li>` : ''}
+          ${splitCategories(link.category).map((category) => `<li class="category">${escapeHtml(category)}</li>`).join('')}
           ${keywords.map((keyword) => `<li>${escapeHtml(keyword)}</li>`).join('')}
         </ul>
         <h2>Partager</h2>

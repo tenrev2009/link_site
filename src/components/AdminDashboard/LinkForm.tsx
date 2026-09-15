@@ -2,6 +2,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { Link } from '../../types';
+import { joinCategories } from '../../lib/categories';
 
 const linkSchema = z.object({
   title: z.string().min(1, 'Le titre est requis'),
@@ -60,6 +61,7 @@ export function LinkForm({ link, onSubmit, onCancel }: LinkFormProps) {
   const submit = ({ keywordsText, ...values }: LinkFormData) =>
     onSubmit({
       ...values,
+      category: joinCategories(values.category),
       keywords: keywordsText
         .split(',')
         .map((keyword) => keyword.trim().toLowerCase())
@@ -142,7 +144,7 @@ export function LinkForm({ link, onSubmit, onCancel }: LinkFormProps) {
 
       <div>
         <label className="block text-sm font-medium text-gray-700">
-          Catégorie
+          Catégories (séparées par des virgules)
         </label>
         <input
           type="text"

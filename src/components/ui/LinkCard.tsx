@@ -3,6 +3,7 @@ import { ExternalLink, FolderOpen, FileText, Youtube, Github, Image as ImageIcon
 import { getYouTubeThumbnail, isYouTubeUrl } from '../../lib/utils';
 import { useState } from 'react';
 import { ShareButton } from './ShareButton';
+import { splitCategories } from '../../lib/categories';
 
 const iconMap: Record<string, React.ComponentType<{ className?: string }>> = {
   FolderOpen,
@@ -78,10 +79,15 @@ export function LinkCard({ link }: LinkCardProps) {
         {link.description && (
           <p className="mt-2 text-sm text-gray-600 line-clamp-3">{link.description}</p>
         )}
-        <div className="mt-3 flex items-center gap-2">
-          <span className="inline-block px-2 py-1 text-xs font-medium text-blue-600 bg-blue-50 rounded-full">
-            {link.category}
-          </span>
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          {splitCategories(link.category).map((category) => (
+            <span
+              key={category}
+              className="inline-block px-2 py-1 text-xs font-medium text-blue-600 bg-blue-50 rounded-full"
+            >
+              {category}
+            </span>
+          ))}
           {/\.mp4(\?|$)/i.test(link.url) && (
             <span className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium text-violet-700 bg-violet-50 rounded-full">
               <Play className="w-3 h-3" />

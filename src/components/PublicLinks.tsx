@@ -1,6 +1,7 @@
 import { useLinks } from '../hooks/useLinks';
 import { useSiteConfig } from '../hooks/useSiteConfig';
 import { useAuth } from '../hooks/useAuth';
+import { splitCategories } from '../lib/categories';
 import { Layout } from './layout/Layout';
 import { LinkCard } from './ui/LinkCard';
 import { CategoryFilter } from './ui/CategoryFilter';
@@ -35,9 +36,9 @@ export function PublicLinks() {
     );
   }
 
-  const categories = Array.from(new Set(links.map((link) => link.category)));
+  const categories = Array.from(new Set(links.flatMap((link) => splitCategories(link.category))));
   const filteredLinks = selectedCategory
-    ? links.filter((link) => link.category === selectedCategory)
+    ? links.filter((link) => splitCategories(link.category).includes(selectedCategory))
     : links;
 
   const hasError = linksError || configError;
