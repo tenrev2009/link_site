@@ -9,7 +9,7 @@ import { createCanvaClient } from './canva.js';
 import { createCanvaSync } from './canvaSync.js';
 import { ensureMediaDir, serveMedia } from './media.js';
 import { createDescriber } from './ai/describe.js';
-import { renderNotFoundPage, renderPostPage } from './postPage.js';
+import { isPreviewBot, renderNotFoundPage, renderPostPage } from './postPage.js';
 
 const firebaseApp = initializeApp({ credential: cert(config.serviceAccount) });
 const db = getFirestore(firebaseApp);
@@ -150,10 +150,19 @@ async function handleCanvaSync(req, res) {
 }
 
 // Page de partage d'un post public : lue par les réseaux sociaux pour construire l'aperçu
-async function handlePostPage(req, res, linkId) {
+async function handlePostPage(req, res, linkId, searchParams) {
   const siteUrl = config.allowedOrigins[0] ?? '';
   const link = (await db.collection('links').doc(linkId).get()).data();
   const found = link?.status === 'public';
+
+  // Un visiteur qui clique sur l'aperçu arrive directement sur la vidéo (ou le PDF, l'image, YouTube).
+  // Seuls les robots des réseaux lisent la page ; « ?apercu=1 » l'affiche pour vérification.
+  if (found && link.url && !isPreviewBot(req.headers['user-agent']) && !searchParams.has('apercu')) {
+    res.writeHead(302, { Location: link.url, 'Cache-Control': 'no-store', Vary: 'User-Agent' });
+    res.end();
+    return;
+  }
+
   const html = found
     ? renderPostPage({ id: linkId, link, shareUrl: `${config.shareBaseUrl}/p/${linkId}`, siteUrl })
     : renderNotFoundPage({ siteUrl });
@@ -161,6 +170,7 @@ async function handlePostPage(req, res, linkId) {
   res.writeHead(found ? 200 : 404, {
     'Content-Type': 'text/html; charset=utf-8',
     'Cache-Control': found ? 'public, max-age=300' : 'no-store',
+    Vary: 'User-Agent',
   });
   res.end(req.method === 'HEAD' ? undefined : html);
 }
@@ -215,7 +225,7 @@ const server = http.createServer(async (req, res) => {
     }
     const post = (req.method === 'GET' || req.method === 'HEAD') && pathname.match(/^\/p\/([A-Za-z0-9_-]{1,200})\/?$/);
     if (post) {
-      await handlePostPage(req, res, post[1]);
+      await handlePostPage(req, res, post[1], searchParams);
       return;
     }
     const redescribe = req.method === 'POST' && pathname.match(/^\/links\/([A-Za-z0-9_-]{1,200})\/describe$/);
