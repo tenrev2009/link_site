@@ -71,9 +71,11 @@ function mediaHtml(link, kind, imageUrl) {
   return `${image}<p><a class="button primary" href="${url}" target="_blank" rel="noopener">${label}</a></p>`;
 }
 
-export function renderPostPage({ id, link, shareUrl, siteUrl }) {
+// previewImageUrl : image 1200 × 630 hébergée sur le VPS (voir preview.js), prioritaire pour les aperçus
+export function renderPostPage({ id, link, shareUrl, siteUrl, previewImageUrl = null }) {
   const kind = mediaKind(link);
-  const imageUrl = link.imageUrl || (kind === 'youtube' ? `https://img.youtube.com/vi/${youTubeId(link.url)}/hqdefault.jpg` : '');
+  const pageImageUrl = link.imageUrl || (kind === 'youtube' ? `https://img.youtube.com/vi/${youTubeId(link.url)}/hqdefault.jpg` : '');
+  const imageUrl = previewImageUrl || pageImageUrl;
   const previewDescription = truncate(link.description || `${link.title} — ${link.category ?? ''}`, DESCRIPTION_PREVIEW_LENGTH);
   const title = escapeHtml(link.title);
   const keywords = Array.isArray(link.keywords) ? link.keywords : [];
@@ -88,6 +90,14 @@ export function renderPostPage({ id, link, shareUrl, siteUrl }) {
     ...(imageUrl
       ? [
           ['property', 'og:image', imageUrl],
+          ...(previewImageUrl
+            ? [
+                ['property', 'og:image:secure_url', previewImageUrl],
+                ['property', 'og:image:type', 'image/jpeg'],
+                ['property', 'og:image:width', '1200'],
+                ['property', 'og:image:height', '630'],
+              ]
+            : []),
           ['property', 'og:image:alt', link.altText || link.title],
         ]
       : []),
@@ -155,7 +165,7 @@ export function renderPostPage({ id, link, shareUrl, siteUrl }) {
   <main>
     <header><a href="${escapeHtml(siteUrl)}/"><img src="${escapeHtml(siteUrl)}/logo.png" alt="${SITE_NAME}"></a></header>
     <article>
-      ${mediaHtml(link, kind, imageUrl)}
+      ${mediaHtml(link, kind, pageImageUrl)}
       <div class="content">
         <h1>${title}</h1>
         ${link.description ? `<p>${escapeHtml(link.description)}</p>` : ''}
