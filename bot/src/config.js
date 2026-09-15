@@ -31,6 +31,8 @@ export const config = {
   allowedOrigins: readList(process.env.ALLOWED_ORIGINS, 'https://links.biblio3d.net'),
   // Adresse publique du service : liens des fichiers exportés et retour OAuth Canva
   publicUrl: (process.env.PUBLIC_URL?.trim() || 'https://links-api.biblio3d.net').replace(/\/+$/, ''),
+  // Adresse des pages de partage /p/<id> (un autre domaine pointant vers ce service est possible)
+  shareBaseUrl: (process.env.SHARE_BASE_URL?.trim() || process.env.PUBLIC_URL?.trim() || 'https://links-api.biblio3d.net').replace(/\/+$/, ''),
   // Vidéos et images exportées depuis Canva (volume persistant dans Coolify)
   mediaDir: process.env.MEDIA_DIR?.trim() || '/data/media',
   canva: {

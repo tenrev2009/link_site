@@ -9,6 +9,7 @@ import { createCanvaClient } from './canva.js';
 import { createCanvaSync } from './canvaSync.js';
 import { ensureMediaDir, serveMedia } from './media.js';
 import { createDescriber } from './ai/describe.js';
+import { renderNotFoundPage, renderPostPage } from './postPage.js';
 
 const firebaseApp = initializeApp({ credential: cert(config.serviceAccount) });
 const db = getFirestore(firebaseApp);
@@ -148,6 +149,22 @@ async function handleCanvaSync(req, res) {
   sendJson(res, 202, { started: true });
 }
 
+// Page de partage d'un post public : lue par les réseaux sociaux pour construire l'aperçu
+async function handlePostPage(req, res, linkId) {
+  const siteUrl = config.allowedOrigins[0] ?? '';
+  const link = (await db.collection('links').doc(linkId).get()).data();
+  const found = link?.status === 'public';
+  const html = found
+    ? renderPostPage({ id: linkId, link, shareUrl: `${config.shareBaseUrl}/p/${linkId}`, siteUrl })
+    : renderNotFoundPage({ siteUrl });
+
+  res.writeHead(found ? 200 : 404, {
+    'Content-Type': 'text/html; charset=utf-8',
+    'Cache-Control': found ? 'public, max-age=300' : 'no-store',
+  });
+  res.end(req.method === 'HEAD' ? undefined : html);
+}
+
 async function handleRedescribe(req, res, linkId) {
   await authenticate(req);
   if (!describer) throw new HttpError(503, 'Ajoutez ANTHROPIC_API_KEY dans Coolify pour activer les fiches rédigées par Claude');
@@ -195,6 +212,11 @@ const server = http.createServer(async (req, res) => {
     if ((req.method === 'GET' || req.method === 'HEAD') && pathname.startsWith('/media/')) {
       if (await serveMedia(req, res, pathname.slice('/media/'.length))) return;
       throw new HttpError(404, 'Fichier introuvable');
+    }
+    const post = (req.method === 'GET' || req.method === 'HEAD') && pathname.match(/^\/p\/([A-Za-z0-9_-]{1,200})\/?$/);
+    if (post) {
+      await handlePostPage(req, res, post[1]);
+      return;
     }
     const redescribe = req.method === 'POST' && pathname.match(/^\/links\/([A-Za-z0-9_-]{1,200})\/describe$/);
     if (redescribe) {
