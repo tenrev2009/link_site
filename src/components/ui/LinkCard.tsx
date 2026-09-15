@@ -2,6 +2,8 @@ import { Link } from '../../types';
 import { ExternalLink, FolderOpen, FileText, Youtube, Github, Image as ImageIcon, Music2, Link as LinkIcon, Lock, Play } from 'lucide-react';
 import { getYouTubeThumbnail, isYouTubeUrl } from '../../lib/utils';
 import { useState } from 'react';
+import { ShareButton } from './ShareButton';
+import { postUrl } from '../../lib/share';
 
 const iconMap: Record<string, React.ComponentType<{ className?: string }>> = {
   FolderOpen,
@@ -25,14 +27,15 @@ export function LinkCard({ link }: LinkCardProps) {
   const isYouTube = isYouTubeUrl(link.url);
 
   return (
-    <div className="group relative bg-white rounded-lg shadow-md overflow-hidden hover:shadow-lg transition-shadow">
+    // Pas d'overflow-hidden sur la carte : le menu de partage doit pouvoir déborder
+    <div className="group relative bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow">
       {link.status === 'private' && (
         <span className="absolute top-2 left-2 z-10 inline-flex items-center gap-1 px-2 py-1 text-xs font-medium text-white bg-slate-800/80 rounded-full">
           <Lock className="w-3 h-3" />
           Privé
         </span>
       )}
-      <div className="aspect-video overflow-hidden bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center">
+      <div className="aspect-video overflow-hidden rounded-t-lg bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center">
         {showImage ? (
           <img
             src={imageUrl}
@@ -46,15 +49,28 @@ export function LinkCard({ link }: LinkCardProps) {
       </div>
       <div className="p-4">
         <div className="flex items-start justify-between gap-2">
-          <h3 className="text-lg font-semibold text-gray-900">{link.title}</h3>
-          <a
-            href={link.url}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-blue-600 hover:text-blue-800 flex-shrink-0"
-          >
-            <ExternalLink className="w-5 h-5" />
-          </a>
+          <h3 className="text-lg font-semibold text-gray-900">
+            {link.status === 'public' ? (
+              <a href={postUrl(link)} className="hover:text-blue-700 hover:underline">
+                {link.title}
+              </a>
+            ) : (
+              link.title
+            )}
+          </h3>
+          <div className="flex items-center gap-3 flex-shrink-0">
+            {link.status === 'public' && <ShareButton link={link} />}
+            <a
+              href={link.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label={`Ouvrir « ${link.title} »`}
+              title="Ouvrir"
+              className="text-blue-600 hover:text-blue-800"
+            >
+              <ExternalLink className="w-5 h-5" />
+            </a>
+          </div>
         </div>
         {link.description && (
           <p className="mt-2 text-sm text-gray-600 line-clamp-3">{link.description}</p>
