@@ -3,7 +3,6 @@ import { ExternalLink, FolderOpen, FileText, Youtube, Github, Image as ImageIcon
 import { getYouTubeThumbnail, isYouTubeUrl } from '../../lib/utils';
 import { useState } from 'react';
 import { ShareButton } from './ShareButton';
-import { postUrl } from '../../lib/share';
 
 const iconMap: Record<string, React.ComponentType<{ className?: string }>> = {
   FolderOpen,
@@ -35,7 +34,15 @@ export function LinkCard({ link }: LinkCardProps) {
           Privé
         </span>
       )}
-      <div className="aspect-video overflow-hidden rounded-t-lg bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center">
+      {/* La vignette et le titre ouvrent directement la vidéo, l'image, le PDF ou le lien */}
+      <a
+        href={link.url}
+        target="_blank"
+        rel="noopener noreferrer"
+        tabIndex={-1}
+        aria-hidden="true"
+        className="aspect-video overflow-hidden rounded-t-lg bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center"
+      >
         {showImage ? (
           <img
             src={imageUrl}
@@ -46,17 +53,13 @@ export function LinkCard({ link }: LinkCardProps) {
         ) : (
           <Icon className="w-16 h-16 text-blue-400" />
         )}
-      </div>
+      </a>
       <div className="p-4">
         <div className="flex items-start justify-between gap-2">
           <h3 className="text-lg font-semibold text-gray-900">
-            {link.status === 'public' ? (
-              <a href={postUrl(link)} className="hover:text-blue-700 hover:underline">
-                {link.title}
-              </a>
-            ) : (
-              link.title
-            )}
+            <a href={link.url} target="_blank" rel="noopener noreferrer" className="hover:text-blue-700 hover:underline">
+              {link.title}
+            </a>
           </h3>
           <div className="flex items-center gap-3 flex-shrink-0">
             {link.status === 'public' && <ShareButton link={link} />}

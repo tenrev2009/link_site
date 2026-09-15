@@ -2,6 +2,15 @@
 const SITE_NAME = 'biblio3d';
 const DESCRIPTION_PREVIEW_LENGTH = 200;
 
+// Robots qui construisent les aperçus de liens (ils lisent la page) ; les visiteurs sont redirigés vers le média.
+// Les navigateurs intégrés aux applis (Facebook « FBAN », « LinkedInApp », Instagram…) sont bien des visiteurs.
+const PREVIEW_BOTS =
+  /facebookexternalhit|facebookcatalog|facebot|linkedinbot|twitterbot|whatsapp\/|pinterest(bot)?\/|telegrambot|slackbot|discordbot|skypeuripreview|redditbot|applebot|googlebot|bingbot|embedly|iframely|vkshare|mastodon|bluesky|w3c_validator/i;
+
+export function isPreviewBot(userAgent) {
+  return PREVIEW_BOTS.test(String(userAgent ?? ''));
+}
+
 export function escapeHtml(text) {
   return String(text ?? '').replace(/[&<>"']/g, (char) => `&#${char.charCodeAt(0)};`);
 }
