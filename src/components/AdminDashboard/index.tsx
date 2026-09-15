@@ -76,7 +76,9 @@ export function AdminDashboard() {
         data.keywords.join(',') !== (editingLink.keywords ?? []).join(',');
       await updateLink(editingLink.id, ficheEdited ? { ...data, descriptionSource: 'manual' } : data);
     } else {
-      await addLink({ ...data, priority: links.length });
+      // Les liens sont triés par priorité croissante : un nouveau lien passe devant tous les autres
+      const topPriority = links.length > 0 ? Math.min(...links.map((l) => l.priority)) - 1 : 0;
+      await addLink({ ...data, priority: topPriority });
     }
     setIsFormOpen(false);
     setEditingLink(null);

@@ -101,6 +101,14 @@ export function shareLinkId(key) {
   return `auto-${createHash('sha1').update(key).digest('hex').slice(0, 20)}`;
 }
 
+// Les liens sont triés par priorité croissante : un nouveau lien passe devant tous les autres
+export async function topPriority(links) {
+  const priorities = (await links.get()).docs
+    .map((doc) => doc.data().priority)
+    .filter((priority) => Number.isFinite(priority));
+  return priorities.length > 0 ? Math.min(...priorities) - 1 : 0;
+}
+
 export async function createLinkFromUrl(db, { url: inputUrl, status, category }) {
   const { url, kind, title, description, imageUrl, metadataError } = await resolveLink(inputUrl);
   const links = db.collection('links');
@@ -114,7 +122,7 @@ export async function createLinkFromUrl(db, { url: inputUrl, status, category })
     return { created: false, link: toSummary(existing.id, existing.data()) };
   }
 
-  const count = (await links.count().get()).data().count;
+  const priority = await topPriority(links);
   const now = new Date().toISOString();
   const data = {
     title,
@@ -123,7 +131,7 @@ export async function createLinkFromUrl(db, { url: inputUrl, status, category })
     imageUrl,
     category: category || kind.category,
     iconName: kind.iconName,
-    priority: count,
+    priority,
     status,
     source: kind.source,
     createdAt: now,
