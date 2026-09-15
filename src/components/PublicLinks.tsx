@@ -8,6 +8,8 @@ import { useState } from 'react';
 import { Link as RouterLink } from 'react-router-dom';
 import { Lock, Link as LinkIcon, Eye } from 'lucide-react';
 
+const LOCAL_LOGO = '/logo.png';
+
 export function PublicLinks() {
   const { user, loading: authLoading } = useAuth();
   const { links: allLinks, loading: linksLoading, error: linksError } = useLinks({
@@ -15,6 +17,9 @@ export function PublicLinks() {
   });
   const { config, loading: configLoading, error: configError } = useSiteConfig();
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+  // Logo hébergé par le site (public/logo.png) ; l'adresse des réglages Firebase sert de secours,
+  // et le logo est masqué si aucune image ne se charge
+  const [logoSrc, setLogoSrc] = useState<string | null>(LOCAL_LOGO);
 
   // Connecté : aperçu des liens privés en plus des publics. Les liens à valider restent dans l'admin.
   const links = allLinks.filter(
@@ -43,11 +48,12 @@ export function PublicLinks() {
         <div className="max-w-7xl mx-auto px-4 py-12 sm:px-6 lg:px-8">
           {config && (
             <div className="text-center mb-12">
-              {config.logoUrl && (
+              {logoSrc && (
                 <img
-                  src={config.logoUrl}
-                  alt={config.title}
-                  className="h-24 w-auto mx-auto mb-6"
+                  src={logoSrc}
+                  alt="biblio3d"
+                  className="h-32 sm:h-40 w-auto mx-auto mb-6"
+                  onError={() => setLogoSrc(logoSrc === LOCAL_LOGO && config.logoUrl ? config.logoUrl : null)}
                 />
               )}
               <h1 className="text-4xl font-bold text-gray-900 mb-4">
