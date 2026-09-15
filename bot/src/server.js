@@ -10,6 +10,11 @@ import { createCanvaSync } from './canvaSync.js';
 import { ensureMediaDir, serveMedia } from './media.js';
 import { createDescriber } from './ai/describe.js';
 import { isPreviewBot, renderNotFoundPage, renderPostPage } from './postPage.js';
+import { createReadStream } from 'node:fs';
+import { stat } from 'node:fs/promises';
+import { ensurePreview, previewVersion, warmPreviews } from './preview.js';
+
+const PREVIEW_WARM_MINUTES = 15;
 
 const firebaseApp = initializeApp({ credential: cert(config.serviceAccount) });
 const db = getFirestore(firebaseApp);
@@ -163,8 +168,19 @@ async function handlePostPage(req, res, linkId, searchParams) {
     return;
   }
 
+  // Image d'aperçu 1200 × 630 hébergée ici ; en cas d'échec, l'image d'origine du lien sert de secours
+  let previewImageUrl = null;
+  if (found) {
+    try {
+      await ensurePreview(linkId, link);
+      previewImageUrl = `${config.shareBaseUrl}/p/${linkId}/apercu-${previewVersion(link)}.jpg`;
+    } catch (err) {
+      console.error(`[aperçu] « ${link.title} » : ${err.message}`);
+    }
+  }
+
   const html = found
-    ? renderPostPage({ id: linkId, link, shareUrl: `${config.shareBaseUrl}/p/${linkId}`, siteUrl })
+    ? renderPostPage({ id: linkId, link, shareUrl: `${config.shareBaseUrl}/p/${linkId}`, siteUrl, previewImageUrl })
     : renderNotFoundPage({ siteUrl });
 
   res.writeHead(found ? 200 : 404, {
@@ -173,6 +189,27 @@ async function handlePostPage(req, res, linkId, searchParams) {
     Vary: 'User-Agent',
   });
   res.end(req.method === 'HEAD' ? undefined : html);
+}
+
+// Image d'aperçu d'un post public (le numéro de version dans l'adresse force les réseaux à la recharger)
+async function handlePreviewImage(req, res, linkId) {
+  const link = (await db.collection('links').doc(linkId).get()).data();
+  if (link?.status !== 'public') throw new HttpError(404, 'Aperçu introuvable');
+
+  const file = await ensurePreview(linkId, link);
+  const { size } = await stat(file);
+  res.writeHead(200, {
+    'Content-Type': 'image/jpeg',
+    'Content-Length': size,
+    'Cache-Control': 'public, max-age=604800',
+  });
+  if (req.method === 'HEAD') {
+    res.end();
+    return;
+  }
+  createReadStream(file)
+    .on('error', () => res.destroy())
+    .pipe(res);
 }
 
 async function handleRedescribe(req, res, linkId) {
@@ -222,6 +259,12 @@ const server = http.createServer(async (req, res) => {
     if ((req.method === 'GET' || req.method === 'HEAD') && pathname.startsWith('/media/')) {
       if (await serveMedia(req, res, pathname.slice('/media/'.length))) return;
       throw new HttpError(404, 'Fichier introuvable');
+    }
+    const previewImage =
+      (req.method === 'GET' || req.method === 'HEAD') && pathname.match(/^\/p\/([A-Za-z0-9_-]{1,200})\/apercu-[0-9a-f]{10}\.jpg$/);
+    if (previewImage) {
+      await handlePreviewImage(req, res, previewImage[1]);
+      return;
     }
     const post = (req.method === 'GET' || req.method === 'HEAD') && pathname.match(/^\/p\/([A-Za-z0-9_-]{1,200})\/?$/);
     if (post) {
@@ -278,6 +321,11 @@ server.listen(config.port, () => {
       ? `[claude] fiches rédigées avec ${config.ai.model}, transcription ${config.ai.whisperModel}`
       : '[claude] ANTHROPIC_API_KEY absente : fiches non rédigées'
   );
+
+  // Aperçus des posts publics préparés à l'avance : WhatsApp et Facebook n'attendent pas longtemps
+  const warm = () => warmPreviews(db).catch((err) => console.error(`[aperçu] préparation impossible : ${err.message}`));
+  setTimeout(warm, 30_000);
+  setInterval(warm, PREVIEW_WARM_MINUTES * 60_000);
 
   if (canva.isConfigured()) {
     canvaSync.startScheduler();
