@@ -2,6 +2,7 @@
 import { readFile, stat } from 'node:fs/promises';
 import Anthropic from '@anthropic-ai/sdk';
 import { config } from '../config.js';
+import { splitCategories } from '../links.js';
 import { mediaPath } from '../media.js';
 import { audioSamples, extractFrames, imageForClaude, isMostlySilent } from './mediaInputs.js';
 import { releaseTranscriber, transcribe } from './transcribe.js';
@@ -16,7 +17,7 @@ const SYSTEM_PROMPT = `Tu rédiges les fiches des publications d'un site de lien
 Rédige en français :
 - description : un seul paragraphe de 3 à 5 phrases, au ton neutre et informatif, qui explique ce que présente la publication et ce qu'on y trouve. Pas de formule promotionnelle, pas d'emoji, et ne commence pas par « Cette publication ».
 - keywords : de 3 à 8 mots-clés en minuscules, du plus pertinent au moins pertinent.
-- category : une catégorie courte. Reprends une catégorie existante si l'une d'elles convient, sinon propose-en une nouvelle de 1 à 3 mots.
+- category : de 1 à 3 catégories courtes, séparées par des virgules (par exemple « AI, Sketchup »). Reprends de préférence les catégories existantes qui conviennent, et propose une nouvelle catégorie de 1 à 3 mots seulement si aucune ne convient.
 - altText : le texte alternatif de l'image principale, une phrase de moins de 150 caractères qui décrit ce qu'on voit.
 
 La transcription est produite automatiquement et peut contenir des erreurs. Sers-t'en uniquement si c'est un commentaire ou une interview. Ignore-la si ce sont des paroles de chanson ou une phrase sans rapport avec les images : la transcription automatique invente parfois des phrases sur de la musique ou du silence. Ne mentionne jamais la transcription elle-même.
@@ -51,7 +52,7 @@ function normalize(data) {
   return {
     description: String(data.description ?? '').trim(),
     keywords,
-    category: String(data.category ?? '').trim().slice(0, 40),
+    category: splitCategories(data.category).slice(0, 3).join(', ').slice(0, 120),
     altText: String(data.altText ?? '').trim().slice(0, 200),
   };
 }

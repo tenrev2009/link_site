@@ -68,13 +68,13 @@ export function QuickAdd({ initialText = '', autoSubmit = false, onAdded }: Quic
             className={inputClass}
           />
         </label>
-        <label className="md:w-40">
-          <span className="block text-sm font-medium text-gray-700 mb-1">Catégorie</span>
+        <label className="md:w-56">
+          <span className="block text-sm font-medium text-gray-700 mb-1">Catégories</span>
           <input
             type="text"
             value={category}
             onChange={(e) => setCategory(e.target.value)}
-            placeholder="Automatique"
+            placeholder="Automatique (ex. AI, Sketchup)"
             className={inputClass}
           />
         </label>
